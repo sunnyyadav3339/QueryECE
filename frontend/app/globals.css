@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-navy: #1e3a6b;
+  --color-navy-dark: #0f1d36;
+  --color-navy-soft: #eef2f8;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: #ffffff;
+  color: #1e293b;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Markdown answers */
+.prose-chat p {
+  margin: 0.4rem 0;
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
+}
+.prose-chat ul {
+  list-style: disc;
+}
+.prose-chat ol {
+  list-style: decimal;
+}
+.prose-chat li {
+  margin: 0.15rem 0;
+}
+.prose-chat a {
+  color: var(--color-navy);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-chat strong {
+  font-weight: 600;
+  color: #0f172a;
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3 {
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+.prose-chat table {
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  display: block;
+  overflow-x: auto;
+}
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+}
+.prose-chat th {
+  background: #f8fafc;
+}
+.prose-chat code {
+  background: #f1f5f9;
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.85em;
 }

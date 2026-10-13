@@ -39,3 +39,11 @@ yarn-error.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+# =========================
+# Generated data (rebuilt by the crawler)
+# =========================
+data/queryece.db*
+data/chroma/
+data/models/
+data/.jwt_secret
+.vscode/

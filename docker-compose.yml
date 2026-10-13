@@ -1,19 +1,26 @@
-﻿services:
+services:
   backend:
-    build: 
+    build:
       context: ./backend
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATA_DIR=/data
     volumes:
       - ./backend:/app
-      - ./data:/data 
-    # The env_file requirement has been completely removed
+      - ./data:/data
+    # --reload for development; drop it for a production run.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
 
   frontend:
-    build: 
+    build:
       context: ./frontend
     ports:
       - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://localhost:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
