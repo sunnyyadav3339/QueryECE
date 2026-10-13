@@ -107,9 +107,19 @@ async def _stream_once(messages, tools, tool_choice, model, on_token, retries=2)
     return result
 
 
-async def complete(messages, model=GROQ_FAST_MODEL, max_tokens=400) -> str:
-    """Non-streamed completion for housekeeping (summaries)."""
+async def complete(messages, model=GROQ_FAST_MODEL, max_tokens=400, temperature=None) -> str:
+    """Non-streamed completion (summaries, email drafts). Falls back to the fast
+    model when the main one is rate limited."""
     params = _params(model)
     params["max_completion_tokens"] = max_tokens
-    resp = await client().chat.completions.create(model=model, messages=messages, **params)
+    if temperature is not None:
+        params["temperature"] = temperature
+    try:
+        resp = await client(0 if model != GROQ_FAST_MODEL else 2).chat.completions.create(
+            model=model, messages=messages, **params)
+    except groq.RateLimitError:
+        if model == GROQ_FAST_MODEL:
+            raise LLMUnavailable("The assistant is busy (rate limit reached). Please try again in a minute.")
+        log.warning("rate limited on %s; falling back to %s", model, GROQ_FAST_MODEL)
+        return await complete(messages, GROQ_FAST_MODEL, max_tokens, temperature)
     return (resp.choices[0].message.content or "").strip()

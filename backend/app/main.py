@@ -10,7 +10,7 @@ from app.config import CORS_ORIGINS, CRAWL_INTERVAL_HOURS, ENABLE_SCHEDULER, GRO
 from app.db.database import SessionLocal, init_db
 from app.db.models import Page
 from app.ingest.pipeline import run_pipeline
-from app.routers import auth, chats, data
+from app.routers import auth, chats, data, outreach
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("queryece")
@@ -52,6 +52,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(chats.router)
 app.include_router(data.router)
+app.include_router(outreach.router)
 
 
 @app.get("/")

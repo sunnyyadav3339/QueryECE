@@ -4,11 +4,13 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -38,6 +40,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
+    outreach = relationship("Outreach", back_populates="user", cascade="all, delete-orphan")
 
 
 class Chat(Base):
@@ -69,6 +72,32 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     chat = relationship("Chat", back_populates="messages")
+
+
+class Outreach(Base):
+    """One card per (student, professor) on the outreach tracker, holding the latest draft."""
+
+    __tablename__ = "outreach"
+    __table_args__ = (UniqueConstraint("user_id", "faculty_id"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # No FK to faculty: the crawler may drop and re-create faculty rows; name/email are copied here.
+    faculty_id = Column(Integer, nullable=False)
+    professor_name = Column(String, nullable=False)
+    professor_email = Column(String)
+    purpose = Column(String)
+    subject = Column(String, nullable=False, default="")  # working draft
+    body = Column(Text, nullable=False, default="")
+    sent = Column(JSON, nullable=False, default=list)  # [{subject, body, sent_on}] archived on "mark sent"
+    status = Column(String, nullable=False, default="drafted")  # see routers/outreach.py STATUSES
+    notes = Column(Text, nullable=False, default="")
+    sent_on = Column(Date)
+    follow_up_on = Column(Date)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user = relationship("User", back_populates="outreach")
 
 
 # ---------------------------------------------------------------------------

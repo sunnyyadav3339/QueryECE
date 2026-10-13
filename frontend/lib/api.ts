@@ -45,6 +45,32 @@ export interface Opportunity {
   matched_interest: string | null;
 }
 
+export interface FacultyLite {
+  id: number;
+  name: string;
+  designation: string | null;
+  email: string | null;
+  interests: string | null;
+}
+
+export type OutreachStatus = "drafted" | "sent" | "replied" | "meeting" | "accepted" | "rejected";
+
+export interface OutreachCard {
+  id: number;
+  faculty_id: number;
+  professor_name: string;
+  professor_email: string | null;
+  purpose: string | null;
+  subject: string;
+  body: string;
+  sent: { subject: string; body: string; sent_on: string }[];
+  status: OutreachStatus;
+  notes: string;
+  sent_on: string | null;
+  follow_up_on: string | null;
+  updated_at: string;
+}
+
 export type StreamEvent =
   | { type: "status"; text: string }
   | { type: "token"; text: string }

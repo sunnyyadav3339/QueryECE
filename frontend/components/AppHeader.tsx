@@ -52,6 +52,7 @@ export default function AppHeader() {
           </Link>
           <nav className="flex gap-1">
             {tab("/", "Agent")}
+            {tab("/outreach", "Outreach")}
             {tab("/profile", "Profile")}
           </nav>
         </div>

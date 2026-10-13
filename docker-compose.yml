@@ -24,5 +24,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      # Keep the container's Linux build cache out of the host's frontend/.next;
+      # sharing it breaks `npm run dev` on the host (every route 404s).
+      - /app/.next
     depends_on:
       - backend

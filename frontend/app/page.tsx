@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import Markdown from "@/components/Markdown";
@@ -8,6 +9,7 @@ import {
   streamMessage,
   type ChatMessage,
   type ChatSummary,
+  type FacultyLite,
   type Source,
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
@@ -18,6 +20,17 @@ interface UiMessage extends ChatMessage {
   status?: string;
   error?: string;
   streaming?: boolean;
+}
+
+/** Faculty named in full in an answer, for the "Draft email" shortcuts. */
+function mentionedFaculty(content: string, faculty: FacultyLite[]): FacultyLite[] {
+  const text = content.toLowerCase();
+  return faculty
+    .map((f) => ({ f, at: text.indexOf(f.name.toLowerCase()) }))
+    .filter(({ at }) => at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .slice(0, 3)
+    .map(({ f }) => f);
 }
 
 function starterQuestions(interests: string[]): string[] {
@@ -38,6 +51,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [faculty, setFaculty] = useState<FacultyLite[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -78,6 +92,12 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [user, openChat]);
+
+  useEffect(() => {
+    api<FacultyLite[]>("/api/faculty")
+      .then(setFaculty)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -268,6 +288,23 @@ export default function ChatPage() {
                     )}
                     {m.error && (
                       <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{m.error}</p>
+                    )}
+                    {!m.streaming && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {mentionedFaculty(m.content, faculty).map((f) => (
+                          <Link
+                            key={f.id}
+                            href={`/outreach?draft=${f.id}`}
+                            className="inline-flex items-center gap-1 rounded-full border border-navy/20 bg-blue-50/50 px-2.5 py-1 text-xs font-medium text-navy hover:bg-blue-50"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M4 4h16v16H4z" />
+                              <path d="m4 6 8 7 8-7" />
+                            </svg>
+                            Draft email to Prof. {f.name}
+                          </Link>
+                        ))}
+                      </div>
                     )}
                     {m.sources.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1.5">
