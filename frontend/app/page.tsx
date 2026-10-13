@@ -24,7 +24,8 @@ interface UiMessage extends ChatMessage {
 
 /** Faculty named in full in an answer, for the "Draft email" shortcuts. */
 function mentionedFaculty(content: string, faculty: FacultyLite[]): FacultyLite[] {
-  const text = content.toLowerCase();
+  // gpt-oss often puts non-breaking / narrow spaces inside names; \s matches them all.
+  const text = content.replace(/\s+/g, " ").toLowerCase();
   return faculty
     .map((f) => ({ f, at: text.indexOf(f.name.toLowerCase()) }))
     .filter(({ at }) => at >= 0)

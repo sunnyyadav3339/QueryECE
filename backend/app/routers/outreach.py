@@ -40,7 +40,7 @@ Write one email for the purpose given. Rules:
 - 140-210 words in the body. Formal but warm; plain sentences, no flattery, no buzzwords.
 - Open with "Dear Prof. <surname>," and introduce the student in one line (name, programme, year, IIT Roorkee).
 - Mention ONE or TWO specific things about the professor's work, taken ONLY from the professor material below (a research interest or a sponsored project title). Never invent papers, results, labs or details.
-- Connect it to the student using ONLY the student profile below. Never invent skills, courses, grades or projects. If the profile is thin, keep that part short and honest.
+- Connect it to the student using ONLY the facts listed under STUDENT PROFILE and the student's notes. Interests are interests, not experience: never claim the student has taken a course, built something, used a tool or has a grade unless those exact words appear there. If no background is given, just say which of the professor's topics interest the student and why in general terms.
 - Make one clear request that matches the purpose, and say the CV is attached.
 - Close with "Regards," then the student's name, programme and year, IIT Roorkee, and email, each on its own line.
 - No bracketed placeholders.
@@ -116,7 +116,7 @@ def _student_context(user: User) -> str:
         f"Programme and year: {user.program or 'not given'}, {user.year or 'not given'}",
         f"Email: {user.email}",
         f"Interests: {', '.join(user.interests or []) or 'not given'}",
-        f"About: {user.bio or 'not given'}",
+        f"About: {user.bio or 'not given (so do not mention any courses, skills or projects)'}",
     ])
 
 

@@ -14,8 +14,11 @@ export default function Markdown({ children }: { children: string }) {
           ),
         }}
       >
-        {/* gpt-oss sometimes cites as 【1】 / 【1†source】 while streaming. */}
-        {children.replace(/【(\d+)[^】]*】/g, "[$1]")}
+        {children
+          // gpt-oss sometimes cites as 【1】 / 【1†source】 while streaming.
+          .replace(/【(\d+)[^】]*】/g, "[$1]")
+          // Raw HTML isn't rendered; models use <br> inside table cells.
+          .replace(/<br\s*\/?>/gi, " ")}
       </ReactMarkdown>
     </div>
   );
