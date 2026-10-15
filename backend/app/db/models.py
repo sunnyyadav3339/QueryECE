@@ -37,10 +37,25 @@ class User(Base):
     year = Column(String)  # e.g. "4th semester"
     bio = Column(Text)
     interests = Column(JSON, nullable=False, default=list)
+    # server_default=1: accounts created before OTP verification existed stay usable.
+    email_verified = Column(Boolean, nullable=False, default=False, server_default="1")
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
     outreach = relationship("Outreach", back_populates="user", cascade="all, delete-orphan")
+    email_code = relationship("EmailCode", cascade="all, delete-orphan", uselist=False)
+
+
+class EmailCode(Base):
+    """One-time sign-up verification code (stored hashed). One live code per user."""
+
+    __tablename__ = "email_codes"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    code_hash = Column(String, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    attempts = Column(Integer, nullable=False, default=0)
 
 
 class Chat(Base):

@@ -1,16 +1,69 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-navy: #1e3a6b;
-  --color-navy-dark: #0f1d36;
-  --color-navy-soft: #eef2f8;
+  /* "navy" is the primary brand colour (indigo); kept as a name for existing classes. */
+  --color-navy: #4338ca;
+  --color-navy-dark: #312e81;
+  --color-navy-soft: #eef2ff;
+  --color-ink: #0b1020;
+  --color-canvas: #f5f6fb;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: #ffffff;
+  background: var(--color-canvas);
   color: #1e293b;
+}
+
+.brand-gradient {
+  background-image: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #c026d3 100%);
+}
+.brand-text {
+  background-image: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e7e9f2;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 2px rgb(16 24 64 / 0.04), 0 8px 24px -12px rgb(16 24 64 / 0.08);
+}
+.card-hover {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: #c7d2fe;
+  box-shadow: 0 2px 4px rgb(16 24 64 / 0.05), 0 18px 40px -16px rgb(67 56 202 / 0.25);
+}
+
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.08); }
+  66% { transform: translate(-20px, 20px) scale(0.95); }
+}
+.animate-blob { animation: blob 14s ease-in-out infinite; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-fade-up { animation: fade-up 0.35s ease-out both; }
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg, #94a3b8 0%, #4338ca 50%, #94a3b8 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.6s linear infinite;
 }
 
 /* Markdown answers */
@@ -56,8 +109,13 @@ body {
 .prose-chat th,
 .prose-chat td {
   border: 1px solid #e2e8f0;
-  padding: 0.35rem 0.6rem;
+  padding: 0.4rem 0.65rem;
   text-align: left;
+  vertical-align: top;
+}
+.prose-chat th {
+  font-weight: 600;
+  white-space: nowrap;
 }
 .prose-chat th {
   background: #f8fafc;

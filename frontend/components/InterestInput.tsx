@@ -41,13 +41,13 @@ export default function InterestInput({
         {value.map((topic) => (
           <span
             key={topic}
-            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700"
+            className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700"
           >
             {topic}
             <button
               type="button"
               onClick={() => onChange(value.filter((v) => v !== topic))}
-              className="text-slate-400 hover:text-slate-700"
+              className="text-indigo-400 hover:text-indigo-800"
               aria-label={`Remove ${topic}`}
             >
               ×
@@ -66,12 +66,12 @@ export default function InterestInput({
             }
           }}
           placeholder="Add topic…"
-          className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-navy"
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
         />
         <button
           type="button"
           onClick={() => add(draft)}
-          className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-dark"
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
         >
           Add
         </button>

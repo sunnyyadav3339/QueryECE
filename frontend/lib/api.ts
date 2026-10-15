@@ -53,6 +53,56 @@ export interface FacultyLite {
   interests: string | null;
 }
 
+export interface MatchReason {
+  interest: string;
+  topic: string;
+}
+
+/** A professor as ranked for the signed-in student. */
+export interface FacultyCard {
+  id: number;
+  name: string;
+  designation: string | null;
+  email: string | null;
+  interests: string | null;
+  image_url: string | null;
+  profile_url: string | null;
+  website: string | null;
+  projects: number;
+  match: number;
+  matched: string[];
+  reasons: MatchReason[];
+}
+
+export interface FacultyDetail {
+  id: number;
+  name: string;
+  designation: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  interests: string | null;
+  image_url: string | null;
+  profile_url: string | null;
+  projects: { title: string; agency: string | null; year: string | null; co_pi: string | null }[];
+  startups: { name: string; website: string | null }[];
+}
+
+export interface HomeData {
+  matches: FacultyCard[];
+  openings: Opportunity[];
+  outreach: { total: number; by_status: Record<string, number>; follow_up_due: string[] };
+  questions: string[];
+}
+
+export interface AuthResult {
+  token?: string;
+  user?: User;
+  verification_required?: boolean;
+  email?: string;
+  resend_after?: number;
+}
+
 export type OutreachStatus = "drafted" | "sent" | "replied" | "meeting" | "accepted" | "rejected";
 
 export interface OutreachCard {
@@ -76,6 +126,7 @@ export type StreamEvent =
   | { type: "token"; text: string }
   | { type: "sources"; sources: Source[] }
   | { type: "done"; message_id: number; title: string }
+  | { type: "suggestions"; items: string[] }
   | { type: "error"; text: string };
 
 export function getToken(): string | null {
@@ -175,3 +226,6 @@ export function initials(name: string): string {
     .map((p) => p[0]!.toUpperCase())
     .join("");
 }
+
+/** Link that opens a new chat and asks `q` straight away. */
+export const askUrl = (q: string) => `/chat?q=${encodeURIComponent(q)}`;

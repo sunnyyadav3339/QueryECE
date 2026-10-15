@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import AppHeader from "@/components/AppHeader";
+import AppShell from "@/components/AppShell";
 import { api, type FacultyLite, type OutreachCard, type OutreachStatus } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 
@@ -55,13 +56,12 @@ export default function OutreachPage() {
   const due = cards?.filter(isDue) ?? [];
 
   return (
-    <div className="flex h-full flex-col">
-      <AppHeader />
-      <div className="flex-1 overflow-y-auto bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <AppShell>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-7xl px-8 py-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Professor outreach</h1>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Professor outreach</h1>
               <p className="mt-1 text-sm text-slate-500">
                 Draft personalised emails from each professor&apos;s real research, send them from your own inbox, and
                 track replies.
@@ -69,7 +69,7 @@ export default function OutreachPage() {
             </div>
             <button
               onClick={() => setComposer({ facultyId: null })}
-              className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark"
+              className="brand-gradient rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:opacity-95"
             >
               + Draft new email
             </button>
@@ -93,18 +93,29 @@ export default function OutreachPage() {
           {cards === null ? (
             <p className="mt-10 text-sm text-slate-400">Loading…</p>
           ) : cards.length === 0 ? (
-            <div className="mt-10 rounded-2xl border border-dashed border-slate-300 p-10 text-center">
+            <div className="card mt-10 p-12 text-center">
               <p className="font-medium text-slate-700">No outreach yet</p>
               <p className="mt-1 text-sm text-slate-500">
                 Pick a professor and QueryECE will draft an email using their projects and your profile.
               </p>
+              <div className="mt-5 flex justify-center gap-3">
+                <button
+                  onClick={() => setComposer({ facultyId: null })}
+                  className="brand-gradient rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20"
+                >
+                  Draft your first email
+                </button>
+                <Link href="/professors" className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  Browse professors
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="mt-6 flex gap-4 overflow-x-auto pb-4">
               {STATUSES.map((s) => {
                 const col = cards.filter((c) => c.status === s);
                 return (
-                  <section key={s} className="w-64 shrink-0 rounded-2xl bg-slate-50 p-3">
+                  <section key={s} className="min-w-[200px] flex-1 rounded-2xl border border-slate-200/70 bg-white/50 p-3">
                     <h2 className="mb-3 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
                       <span className={`h-2 w-2 rounded-full ${STATUS_META[s].dot}`} />
                       {STATUS_META[s].label}
@@ -115,7 +126,7 @@ export default function OutreachPage() {
                         <button
                           key={c.id}
                           onClick={() => setOpenId(c.id)}
-                          className="block w-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-navy/40"
+                          className="card card-hover block w-full p-3.5 text-left"
                         >
                           <div className="text-sm font-semibold text-slate-800">Prof. {c.professor_name}</div>
                           <div className="mt-0.5 line-clamp-2 text-xs text-slate-500">{c.subject || c.purpose}</div>
@@ -167,7 +178,7 @@ export default function OutreachPage() {
           }}
         />
       )}
-    </div>
+    </AppShell>
   );
 }
 
@@ -301,7 +312,7 @@ function Composer({
           <button
             onClick={generate}
             disabled={!facultyId || busy}
-            className="rounded-lg bg-navy px-5 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-50"
+            className="brand-gradient rounded-xl px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             {busy ? "Writing…" : "Generate draft"}
           </button>
@@ -457,7 +468,7 @@ function Editor({
               href={gmail}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark"
+              className="brand-gradient rounded-xl px-4 py-2 text-sm font-semibold text-white"
             >
               Open in Gmail
             </a>
@@ -529,7 +540,7 @@ function Editor({
             <button
               onClick={() => patch({ subject, body, notes }, "Saving…")}
               disabled={!dirty || !!busy}
-              className="rounded-lg bg-navy px-5 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-50"
+              className="brand-gradient rounded-xl px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               Save
             </button>

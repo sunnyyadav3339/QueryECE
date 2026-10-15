@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 from app.agent import llm, tools
 from app.config import GROQ_FAST_MODEL
 from app.db.database import SessionLocal
-from app.db.models import Chat, Message, User, utcnow
+from app.db.models import Chat, Faculty, Message, User, utcnow
+from app.rag import personal
 
 log = logging.getLogger(__name__)
 
@@ -53,13 +54,23 @@ How to use tools:
 - search_department_info: everything else (programmes, admissions, courses, labs, research groups, contacts, faculty publications/students/patents/awards, news).
 - Usually one tool call is enough; make another only if the first result is insufficient. Write self-contained queries (resolve "he", "the second one" from the conversation).
 
-Style: answer what was asked, concisely and skimmably (short paragraphs, bullets, bold names; tables only for lists of 4+ similar items). Include emails and links when useful. Use the student's profile below to personalise suggestions; add next steps only when the student asks for advice.
+Personalise every answer to this student (profile below):
+- Keep the useful specifics from tool results (names, emails, links, project titles, dates); don't summarise them away.
+- When you list faculty, projects, labs or openings, put the ones that fit the student's interests first and mark each with ★ plus a few words on why (e.g. "★ fits your Signal Processing interest").
+- For open-ended requests ("who should I approach", "suggest", "what can I do"), start from the matched professors below, then use tools to back up the details you state.
+- Fit advice to their stage: B.Tech students → BTP, summer internships, small projects; M.Tech → thesis topics; PhD → research groups and funding.
+- Use their first name occasionally, not in every answer.
+- When it adds value, end with one line starting "**For you:**" giving a concrete next step tied to their interests (e.g. a professor to read about, or drafting an email from the Outreach tab). Skip it for plain look-ups such as a date or a phone number.
+
+Style: answer what was asked, concisely and skimmably (short paragraphs, bullets, bold names). Include emails and links when useful.
+- People (recommendations, contacts): a bulleted list, one professor per bullet: **Prof. Name** (designation) — ★ why it fits — email. Not a table.
+- Tables only for compact records such as projects, openings or schedules (4+ rows), with short cells (a few words each).
 
 Student profile:
 {profile}"""
 
 
-def _profile_text(user: User) -> str:
+def _profile_text(user: User, db: Session) -> str:
     lines = [f"Name: {user.name}"]
     if user.program or user.year:
         lines.append(f"Programme: {' · '.join(x for x in (user.program, user.year) if x)}")
@@ -67,13 +78,20 @@ def _profile_text(user: User) -> str:
         lines.append(f"Research interests: {', '.join(user.interests)}")
     if user.bio:
         lines.append(f"About: {user.bio[:400]}")
+    if user.interests:
+        matches = personal.profile_matches_text(db.query(Faculty).all(), user.interests)
+        if matches:
+            lines.append("Professors whose listed research best matches these interests "
+                         "(from their faculty profiles):\n" + matches)
+    else:
+        lines.append("(No research interests set yet; you may suggest adding them on the Profile page.)")
     return "\n".join(lines)
 
 
 def build_context(db: Session, chat: Chat, user: User) -> list[dict]:
     """System prompt + summary + as many recent messages as fit the budget."""
     messages = [{"role": "system", "content": SYSTEM_PROMPT.format(
-        today=date.today().strftime("%d %B %Y"), profile=_profile_text(user))}]
+        today=date.today().strftime("%d %B %Y"), profile=_profile_text(user, db))}]
     if chat.summary:
         messages.append({"role": "system", "content": f"Summary of the earlier conversation:\n{chat.summary}"})
 
@@ -199,8 +217,37 @@ async def respond(chat_id: str, user_id: int, text: str) -> AsyncIterator[dict]:
         db.commit()
         yield {"type": "sources", "sources": cited}
         yield {"type": "done", "message_id": msg.id, "title": chat.title}
+        user = db.get(User, user_id)
+        profile = _profile_text(user, db) if user else ""
+
+    suggestions = await suggest_followups(text, answer, profile)
+    if suggestions:
+        yield {"type": "suggestions", "items": suggestions}
 
     asyncio.create_task(maybe_summarize(chat_id))
+
+
+FOLLOWUP_PROMPT = (
+    "Suggest exactly 3 follow-up questions this student could ask the IIT Roorkee ECE department "
+    "assistant next. Make them specific to the answer and to the student's interests, at most 12 words "
+    "each, answerable from the department website (faculty, projects, labs, admissions, openings). "
+    "Write them in the student's voice. Output one question per line, nothing else.")
+LIST_MARKER_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
+
+
+async def suggest_followups(question: str, answer: str, profile: str) -> list[str]:
+    """Three short next questions tailored to the student (fast model, separate quota)."""
+    prompt = [
+        {"role": "system", "content": FOLLOWUP_PROMPT},
+        {"role": "user", "content": f"Student:\n{profile[:900]}\n\nQuestion: {question}\n\nAnswer:\n{answer[:1500]}"},
+    ]
+    try:
+        raw = await llm.complete(prompt, model=GROQ_FAST_MODEL, max_tokens=300)
+    except Exception:
+        log.warning("follow-up suggestions failed", exc_info=True)
+        return []
+    items = [LIST_MARKER_RE.sub("", line).strip().strip('"') for line in raw.splitlines()]
+    return [q for q in items if 8 <= len(q) <= 120][:3]
 
 
 async def maybe_summarize(chat_id: str):

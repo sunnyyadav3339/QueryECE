@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AppHeader from "@/components/AppHeader";
+import AppShell from "@/components/AppShell";
 import InterestInput from "@/components/InterestInput";
 import { api, initials, type User } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/lib/auth";
@@ -68,37 +68,41 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
   };
 
   const input =
-    "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-navy focus:ring-2 focus:ring-navy/10";
+    "w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10";
 
   return (
-    <div className="flex h-full flex-col">
-      <AppHeader />
-      <div className="flex-1 overflow-y-auto bg-white">
-        <div className="mx-auto grid max-w-5xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[340px_1fr]">
+    <AppShell>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto grid max-w-6xl grid-cols-[340px_1fr] gap-6 px-8 py-8">
           {/* Identity card */}
           <div className="space-y-6">
-            <section className="rounded-2xl border border-slate-200 p-6 text-center">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-navy text-2xl font-semibold text-white">
-                {initials(form.name || user.name)}
+            <section className="card overflow-hidden text-center">
+              <div className="brand-gradient relative h-24">
+                <div className="animate-blob absolute -right-6 -top-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
               </div>
-              <h1 className="mt-4 text-lg font-semibold text-slate-900">{user.name}</h1>
-              <p className="text-sm text-slate-500">
-                {[user.program, user.year].filter(Boolean).join(", ") || "Add your programme below"}
-              </p>
-              <p className="mt-3 text-sm text-slate-500">{user.email}</p>
+              <div className="relative -mt-11 px-6 pb-6">
+                <div className="brand-gradient mx-auto flex h-22 w-22 items-center justify-center rounded-3xl text-3xl font-bold text-white shadow-xl ring-4 ring-white">
+                  {initials(form.name || user.name)}
+                </div>
+                <h1 className="mt-4 text-xl font-bold text-slate-900">{user.name}</h1>
+                <p className="text-sm text-slate-500">
+                  {[user.program, user.year].filter(Boolean).join(" · ") || "Add your programme below"}
+                </p>
+                <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  ✓ {user.email}
+                </p>
+              </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 p-6">
-              <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-700">Research interests</h2>
+            <section className="card p-6">
+              <h2 className="mb-1 font-semibold text-slate-900">Research interests</h2>
+              <p className="mb-4 text-xs text-slate-500">These drive your professor matches, answers and openings.</p>
               <InterestInput value={interests} onChange={setInterests} />
-              <p className="mt-3 text-xs text-slate-400">
-                Used to personalise answers and rank openings for you.
-              </p>
             </section>
           </div>
 
           <div className="space-y-6">
-            <section className="rounded-2xl border border-slate-200 p-6">
+            <section className="card p-6">
               <h2 className="mb-4 font-semibold text-slate-900">Profile details</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
@@ -140,22 +144,22 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
                 <button
                   onClick={save}
                   disabled={!dirty || saving}
-                  className="rounded-lg bg-navy px-5 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-50"
+                  className="brand-gradient rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:shadow-none"
                 >
                   {saving ? "Saving…" : "Save changes"}
                 </button>
               </div>
             </section>
 
-            <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <section className="grid grid-cols-4 gap-4">
               {[
                 [user.stats.chats, "Conversations"],
                 [user.stats.questions, "Questions asked"],
                 [status?.faculty ?? "–", "Faculty indexed"],
                 [status?.opportunities ?? "–", "Open adverts"],
               ].map(([value, label]) => (
-                <div key={label as string} className="rounded-2xl border border-slate-200 p-4 text-center">
-                  <div className="text-2xl font-bold text-slate-900">{value}</div>
+                <div key={label as string} className="card p-5 text-center">
+                  <div className="brand-text text-3xl font-bold">{value}</div>
                   <div className="mt-1 text-xs text-slate-500">{label}</div>
                 </div>
               ))}
@@ -174,6 +178,6 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

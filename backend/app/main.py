@@ -10,7 +10,7 @@ from app.config import CORS_ORIGINS, CRAWL_INTERVAL_HOURS, ENABLE_SCHEDULER, GRO
 from app.db.database import SessionLocal, init_db
 from app.db.models import Page
 from app.ingest.pipeline import run_pipeline
-from app.routers import auth, chats, data, outreach
+from app.routers import auth, chats, data, discover, outreach
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("queryece")
@@ -47,12 +47,15 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="QueryECE API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True,
+    # Any local port too: Windows sometimes reserves 3000, and the dev server moves.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["*"], allow_headers=["*"],
 )
 app.include_router(auth.router)
 app.include_router(chats.router)
 app.include_router(data.router)
 app.include_router(outreach.router)
+app.include_router(discover.router)
 
 
 @app.get("/")

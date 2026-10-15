@@ -21,9 +21,25 @@ def _sqlite_pragmas(dbapi_connection, _record):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _add_missing_columns(conn):
+    """create_all() never alters existing tables; add new nullable/defaulted columns by hand."""
+    for table in Base.metadata.sorted_tables:
+        existing = {row[1] for row in conn.execute(text(f'PRAGMA table_info("{table.name}")'))}
+        if not existing:
+            continue
+        for col in table.columns:
+            if col.name in existing:
+                continue
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'
+            if col.server_default is not None:
+                ddl += f" NOT NULL DEFAULT {col.server_default.arg}"
+            conn.execute(text(ddl))
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
+        _add_missing_columns(conn)
         # Keyword (BM25) index over chunks; complements the vector index.
         conn.execute(text(
             "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5("

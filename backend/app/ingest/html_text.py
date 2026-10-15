@@ -25,8 +25,13 @@ HEADING_CLASSES = ("section-heading", "section-heading-blue", "sub-heading")
 LINK_WORDS = re.compile(r"^(view|download|click here|here|link|pdf|read more|website)$", re.I)
 
 
+# Some IITR pages contain Windows-1252 punctuation (curly quotes, dashes) decoded
+# as Latin-1, which leaves C1 control characters; map them back.
+_C1_FIX = {c: bytes([c]).decode("cp1252", errors="replace").replace("�", "") for c in range(0x80, 0xA0)}
+
+
 def clean(text: str) -> str:
-    return " ".join((text or "").replace("\xa0", " ").split())
+    return " ".join((text or "").translate(_C1_FIX).replace("\xa0", " ").split())
 
 
 def _is_heading(tag: Tag) -> bool:

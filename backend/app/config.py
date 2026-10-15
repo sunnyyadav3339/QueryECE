@@ -34,6 +34,16 @@ ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() == "true"
 # --- Auth ---
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "168"))
 ADMIN_EMAILS = {e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()}
+# Outgoing mail for sign-up codes (e.g. Gmail: smtp.gmail.com, port 587, an App Password).
+# If SMTP_HOST is empty, codes are written to the server log instead (local demo mode).
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+if "gmail" in SMTP_HOST:
+    # Google shows app passwords in groups of four ("abcd efgh ..."); the spaces aren't part of it.
+    SMTP_PASSWORD = SMTP_PASSWORD.replace(" ", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "") or SMTP_USER
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
 
