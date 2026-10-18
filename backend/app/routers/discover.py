@@ -4,11 +4,13 @@ import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.auth import current_user
 from app.db.database import get_db
 from app.db.models import Faculty, Opportunity, Outreach, Project, Startup, User
+from app.ingest.photos import local_photo_url, photo_path
 from app.rag.personal import rank_faculty, top_matches
 from app.routers.data import _rank_opportunities
 
@@ -19,7 +21,7 @@ def _faculty_card(row: dict, project_counts: dict[int, int]) -> dict:
     f = row["faculty"]
     return {
         "id": f.id, "name": f.name, "designation": f.designation, "email": f.email,
-        "interests": f.interests, "image_url": f.image_url, "profile_url": f.profile_url,
+        "interests": f.interests, "image_url": local_photo_url(f.id), "profile_url": f.profile_url,
         "website": f.website, "projects": project_counts.get(f.id, 0),
         "match": row["match"], "matched": row["matched"], "reasons": row["reasons"],
     }
@@ -41,6 +43,16 @@ async def my_faculty(user: User = Depends(current_user), db: Session = Depends(g
     return [_faculty_card(r, counts) for r in ranked]
 
 
+@router.get("/faculty/{faculty_id}/photo")
+def faculty_photo(faculty_id: int):
+    """Saved copy of a faculty photo. Public, since <img> tags can't send the auth header."""
+    path = photo_path(faculty_id)
+    if not path:
+        raise HTTPException(404, "No saved photo")
+    # The URL carries ?v=<mtime>, so a changed photo gets a new URL and can be cached long.
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+
 @router.get("/faculty/{faculty_id}")
 def faculty_detail(faculty_id: int, _user: User = Depends(current_user), db: Session = Depends(get_db)):
     f = db.get(Faculty, faculty_id)
@@ -50,7 +62,7 @@ def faculty_detail(faculty_id: int, _user: User = Depends(current_user), db: Ses
     startups = db.query(Startup).filter_by(faculty_id=f.id).all()
     return {
         "id": f.id, "name": f.name, "designation": f.designation, "email": f.email, "phone": f.phone,
-        "website": f.website, "interests": f.interests, "image_url": f.image_url, "profile_url": f.profile_url,
+        "website": f.website, "interests": f.interests, "image_url": local_photo_url(f.id), "profile_url": f.profile_url,
         "projects": [{"title": p.title, "agency": p.agency, "year": p.year, "co_pi": p.co_pi} for p in projects],
         "startups": [{"name": s.name, "website": s.website} for s in startups],
     }

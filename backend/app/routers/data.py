@@ -11,6 +11,7 @@ from app.auth import admin_user, current_user
 from app.db.database import get_db
 from app.db.models import CrawlRun, Faculty, Opportunity, Page, Project, User
 from app.ingest import pipeline
+from app.ingest.photos import local_photo_url
 from app.rag import index
 from app.rag.embeddings import cosine, embed_passages, embed_query
 
@@ -22,7 +23,7 @@ def faculty(db: Session = Depends(get_db)):
     rows = db.query(Faculty).order_by(Faculty.name).all()
     return [{"id": f.id, "name": f.name, "designation": f.designation, "email": f.email, "phone": f.phone,
              "website": f.website, "interests": f.interests, "profile_url": f.profile_url,
-             "image_url": f.image_url} for f in rows]
+             "image_url": local_photo_url(f.id)} for f in rows]
 
 
 # Measured with bge-small: interest vs. a clearly relevant advert ~0.72-0.76,

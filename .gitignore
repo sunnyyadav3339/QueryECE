@@ -46,4 +46,5 @@ data/queryece.db*
 data/chroma/
 data/models/
 data/.jwt_secret
+data/photos/
 .vscode/

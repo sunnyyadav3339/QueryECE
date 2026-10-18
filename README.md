@@ -85,6 +85,13 @@ With Gmail, turn on 2-Step Verification, create an App Password and use it as
 `SMTP_PASSWORD`. Without SMTP settings, codes are printed in the backend log,
 which is enough for a local demo.
 
+**Faculty photos.** Photos are hosted on channeli.in, which is reachable only from
+the IIT Roorkee network. Each crawl saves small copies in `data/photos/`, and the
+backend serves them, so they show up anywhere afterwards. Off campus the crawl
+keeps the saved copies. To refresh just the photos (on campus Wi-Fi or VPN), run
+`python -m app.ingest.photos` from `backend/`, with the Docker backend stopped, since
+SQLite can't be shared between Windows and a container.
+
 With Docker, run `docker compose up --build`. If the database is empty, the backend crawls on first start.
 
 To trigger a re-crawl from the API, add your email to `ADMIN_EMAILS` and call `POST /api/admin/crawl`.

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from app.db.database import SessionLocal, init_db
 from app.db.models import Chunk, CrawlRun, Faculty, Opportunity, Page, Project, Startup
+from app.ingest.photos import sync_photos
 from app.ingest import extractors
 from app.ingest.crawler import FetchedPage, crawl, fetch_bytes, page_category
 from app.ingest.html_text import pdf_to_text
@@ -162,6 +163,12 @@ def run_pipeline(max_pages: int | None = None) -> dict:
                 log.info("crawl progress: %s fetched, %s changed", run.pages_fetched, run.pages_changed)
 
         _refresh_faculty(db, structured["faculty"])
+        db.flush()
+        try:
+            photos = sync_photos(db.query(Faculty).all())
+        except Exception:  # photos are cosmetic; never fail the crawl over them
+            log.exception("photo sync failed")
+            photos = {"error": True}
         _refresh_projects(db, structured["projects"])
         _refresh_startups(db, structured["startups"])
         _refresh_opportunities(db, structured["opportunities"])
@@ -185,6 +192,7 @@ def run_pipeline(max_pages: int | None = None) -> dict:
             "pages_removed": run.pages_removed, "faculty": len(structured["faculty"]),
             "projects": len(structured["projects"]), "startups": len(structured["startups"]),
             "opportunities": len(structured["opportunities"]), "chunks_indexed": index.count(),
+            "photos": photos,
         }
         log.info("pipeline finished: %s", summary)
         return summary

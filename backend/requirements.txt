@@ -18,6 +18,7 @@ rapidfuzz>=3.8
 # --- Retrieval ---
 chromadb>=0.5.5
 fastembed>=0.3.6
+pillow>=10  # faculty photo thumbnails (also pulled in by fastembed)
 
 # --- LLM ---
 groq>=0.11

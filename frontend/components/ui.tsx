@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { initials } from "@/lib/api";
+import { API_BASE, initials } from "@/lib/api";
 
-/** Faculty photo from the IITR directory, falling back to initials if it fails to load. */
+/** Faculty photo (a copy saved by the backend), falling back to initials when there is none. */
 export function FacultyPhoto({
   name,
   src,
@@ -22,9 +22,9 @@ export function FacultyPhoto({
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- external IITR photos; no optimisation needed
+    // eslint-disable-next-line @next/next/no-img-element -- small photos served by our backend; no optimisation needed
     <img
-      src={src}
+      src={src.startsWith("/") ? `${API_BASE}${src}` : src}
       alt={`Prof. ${name}`}
       loading="lazy"
       onError={() => setFailed(true)}

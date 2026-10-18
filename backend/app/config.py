@@ -15,6 +15,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "queryece.db"
 CHROMA_DIR = DATA_DIR / "chroma"
 MODEL_CACHE_DIR = DATA_DIR / "models"
+PHOTOS_DIR = DATA_DIR / "photos"  # local copies of faculty photos (see ingest/photos.py)
 
 # --- LLM (Groq) ---
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
