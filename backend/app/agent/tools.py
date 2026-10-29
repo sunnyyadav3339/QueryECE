@@ -4,13 +4,15 @@ registers the pages it used so answers can cite them as [n]."""
 import hashlib
 import re
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from app.db.database import SessionLocal
-from app.db.models import Faculty, Opportunity, Project, Startup
+from app.config import APP_URL
+from app.db.models import Faculty, Insight, InsightVote, Opportunity, Project, Startup
 from app.ingest.extractors import FacultyResolver, name_key
 from app.rag import index
 from app.rag.embeddings import cosine, embed_passages, embed_query
+from app.rag.personal import match_texts
 
 MAX_TOOL_CHARS = 6500  # ~1.8K tokens per tool result
 FACULTY_DIRECTORY_URL = (
@@ -115,6 +117,22 @@ TOOL_SCHEMAS = [
                     "ece_only": {"type": "boolean", "default": True},
                     "keyword": {"type": "string"},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_senior_insights",
+            "description": (
+                "Tips written by IITR students/seniors that are NOT on any website: experiences with professors "
+                "(reply habits, what they look for), BTP/projects, courses and electives, interviews, internships. "
+                "Use alongside official tools for advice or 'what is it like' questions. Unofficial and anecdotal."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "What to look for, incl. professor/course names."}},
+                "required": ["query"],
             },
         },
     },
@@ -273,11 +291,51 @@ def list_opportunities(reg: SourceRegistry, ece_only: bool = True, keyword: str 
         return _clip("\n".join(lines) or "No openings found.")
 
 
+def search_senior_insights(reg: SourceRegistry, query: str, **_ignored) -> str:
+    from app.routers.insights import CATEGORIES  # local import: routers import tools indirectly
+
+    with SessionLocal() as db:
+        rows = db.query(Insight).filter(Insight.hidden.is_(False)).order_by(Insight.created_at.desc()).limit(400).all()
+        if not rows:
+            return "No senior insights have been shared yet."
+        names = {f.id: f.name for f in db.query(Faculty.id, Faculty.name)}
+        helpful = _count_helpful(db)
+        texts = [(str(r.id), " ".join(x for x in (CATEGORIES.get(r.category, ""), names.get(r.faculty_id) or "",
+                                                  r.subject or "", r.body) if x)) for r in rows]
+        scores = match_texts(texts, [query])
+        q = query.lower()
+        ranked = []
+        for r in rows:
+            score = scores[str(r.id)][0]
+            name = names.get(r.faculty_id)
+            if name and name.lower().split()[-1] in q:  # asked about this professor by name
+                score += 0.15
+            ranked.append((score, r))
+        ranked = [x for x in sorted(ranked, key=lambda x: -x[0]) if x[0] >= 0.58][:5]
+        if not ranked:
+            return "No senior insights match this question."
+        blocks = []
+        for _score, r in ranked:
+            label = CATEGORIES.get(r.category, r.category)
+            about = f" · about Prof. {names[r.faculty_id]}" if r.faculty_id in names else ""
+            subj = f" · {r.subject}" if r.subject else ""
+            n = reg.ref(f"Senior insight · {label}{about}", f"{APP_URL}/insights?id={r.id}")
+            votes = helpful.get(r.id, 0)
+            blocks.append(f"[{n}] (Senior insight, unofficial{about}{subj}; {votes} found it helpful) {r.body}")
+        return _clip("\n\n".join(blocks))
+
+
+def _count_helpful(db) -> dict[int, int]:
+    return dict(db.query(InsightVote.insight_id, func.count()).filter(InsightVote.kind == "helpful")
+                .group_by(InsightVote.insight_id).all())
+
+
 REGISTRY = {
     "search_department_info": search_department_info,
     "find_faculty": find_faculty,
     "list_sponsored_projects": list_sponsored_projects,
     "list_opportunities": list_opportunities,
+    "search_senior_insights": search_senior_insights,
 }
 
 STATUS_TEXT = {
@@ -285,4 +343,5 @@ STATUS_TEXT = {
     "find_faculty": "Looking up faculty",
     "list_sponsored_projects": "Checking sponsored projects",
     "list_opportunities": "Checking open positions",
+    "search_senior_insights": "Reading seniors' insights",
 }

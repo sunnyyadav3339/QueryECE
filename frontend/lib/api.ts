@@ -11,6 +11,41 @@ export interface User {
   bio: string | null;
   interests: string[];
   stats: { chats: number; questions: number };
+  cv_filename: string | null;
+  cv_chars: number;
+  email_alerts: boolean;
+}
+
+export interface Insight {
+  id: number;
+  category: string;
+  category_label: string;
+  faculty_id: number | null;
+  faculty_name: string | null;
+  subject: string | null;
+  body: string;
+  author: string;
+  author_detail: string | null;
+  helpful: number;
+  voted: boolean;
+  reported: boolean;
+  mine: boolean;
+  can_delete: boolean;
+  created_at: string | null;
+}
+
+export interface UpdateItem {
+  id: number;
+  kind: "new_opening" | "new_project" | "new_page" | "updated_page";
+  label: string;
+  title: string;
+  url: string | null;
+  detail: string | null;
+  faculty_id: number | null;
+  faculty_name: string | null;
+  created_at: string | null;
+  for_you: boolean;
+  matched_interest: string | null;
 }
 
 export interface ChatSummary {

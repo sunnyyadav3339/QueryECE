@@ -45,6 +45,8 @@ if "gmail" in SMTP_HOST:
     # Google shows app passwords in groups of four ("abcd efgh ..."); the spaces aren't part of it.
     SMTP_PASSWORD = SMTP_PASSWORD.replace(" ", "")
 SMTP_FROM = os.getenv("SMTP_FROM", "") or SMTP_USER
+# Public address of the web app, used for links in emails.
+APP_URL = os.getenv("APP_URL", "http://localhost:3000").rstrip("/")
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
 

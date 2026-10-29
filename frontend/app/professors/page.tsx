@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { ChatIcon, CloseIcon, LinkIcon, MailIcon, SearchIcon } from "@/components/icons";
 import { FacultyPhoto, MatchRing, plural, reasonTopic, topicList } from "@/components/ui";
-import { api, askUrl, type FacultyCard, type FacultyDetail } from "@/lib/api";
+import InsightCard from "@/components/InsightCard";
+import { api, askUrl, type FacultyCard, type FacultyDetail, type Insight } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 
 type Sort = "match" | "name" | "projects";
@@ -41,10 +42,10 @@ export default function ProfessorsPage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-8 py-8">
+        <div className="mx-auto max-w-[1120px] px-6 pb-16 pt-10">
           <div className="flex items-end justify-between gap-6">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Professors</h1>
+              <h1 className="headline text-[40px]">Professors</h1>
               <p className="mt-1 text-sm text-slate-500">
                 {faculty ? `${faculty.length} ECE faculty` : "Loading faculty…"}
                 {user.interests.length > 0 && " · ranked by how well their research matches your interests"}
@@ -95,7 +96,7 @@ export default function ProfessorsPage() {
                 className="card card-hover flex flex-col p-5 text-left"
               >
                 <div className="flex items-start gap-4">
-                  <FacultyPhoto name={f.name} src={f.image_url} className="h-16 w-16 rounded-2xl" />
+                  <FacultyPhoto name={f.name} src={f.image_url} className="h-16 w-16 rounded-full" />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold leading-snug text-slate-900">Prof. {f.name}</div>
                     <div className="text-xs text-slate-500">{f.designation}</div>
@@ -137,7 +138,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
     <button
       onClick={onClick}
       className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-        active ? "brand-gradient text-white shadow-md shadow-indigo-500/20" : "border border-slate-200 bg-white text-slate-600 hover:border-indigo-200"
+        active ? "bg-[#1d1d1f] text-white" : "bg-black/[0.04] text-[#1d1d1f] hover:bg-black/[0.08]"
       }`}
     >
       {children}
@@ -147,8 +148,12 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
 
 function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard | null; onClose: () => void }) {
   const [detail, setDetail] = useState<FacultyDetail | null>(null);
+  const [insights, setInsights] = useState<Insight[] | null>(null);
   useEffect(() => {
     api<FacultyDetail>(`/api/faculty/${id}`).then(setDetail);
+    api<{ insights: Insight[] }>(`/api/insights?faculty_id=${id}`)
+      .then((d) => setInsights(d.insights))
+      .catch(() => setInsights([]));
   }, [id]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -161,17 +166,17 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={onClose} />
       <aside className="animate-fade-up relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl">
-        <div className="brand-gradient relative px-7 pb-7 pt-6 text-white">
-          <button onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1 text-white/80 hover:bg-white/10" aria-label="Close">
+        <div className="relative bg-[#f5f5f7] px-7 pb-7 pt-8">
+          <button onClick={onClose} className="absolute right-4 top-4 rounded-full bg-black/[0.05] p-1.5 text-[#6e6e73] hover:bg-black/10" aria-label="Close">
             <CloseIcon />
           </button>
           <div className="flex items-center gap-5">
-            <FacultyPhoto name={name} src={detail?.image_url ?? card?.image_url ?? null} className="h-24 w-24 rounded-3xl ring-4 ring-white/30" />
+            <FacultyPhoto name={name} src={detail?.image_url ?? card?.image_url ?? null} className="h-24 w-24 rounded-full" />
             <div>
-              <h2 className="text-2xl font-bold">Prof. {name}</h2>
-              <p className="text-sm text-indigo-100">{detail?.designation ?? card?.designation}</p>
+              <h2 className="headline text-[28px]">Prof. {name}</h2>
+              <p className="text-[15px] text-[#6e6e73]">{detail?.designation ?? card?.designation}</p>
               {card && card.match > 0 && (
-                <span className="mt-2 inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
+                <span className="mt-2 inline-block text-sm font-medium text-navy">
                   {card.match}% match with your interests
                 </span>
               )}
@@ -183,7 +188,7 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
           <div className="flex gap-2">
             <Link
               href={askUrl(`Tell me about Prof. ${name}'s research and current projects`)}
-              className="brand-gradient flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white"
+              className="brand-gradient flex flex-1 items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold text-white"
             >
               <ChatIcon className="h-4 w-4" /> Ask QueryECE
             </Link>
@@ -196,8 +201,8 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
           </div>
 
           {card && card.reasons.length > 0 && (
-            <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Why they match you</h3>
+            <section className="rounded-2xl bg-[#f5f5f7] p-5">
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f]">Why they match you</h3>
               <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
                 {card.reasons.map((r) => (
                   <li key={r.interest}>
@@ -209,7 +214,7 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
           )}
 
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Contact</h3>
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f]">Contact</h3>
             <div className="mt-2 space-y-1.5 text-sm">
               {detail?.email && (
                 <a href={`mailto:${detail.email}`} className="flex items-center gap-2 text-slate-700 hover:text-navy">
@@ -226,7 +231,7 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
           </section>
 
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Research interests</h3>
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f]">Research interests</h3>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {topicList(detail?.interests ?? card?.interests ?? null, 20).map((t) => (
                 <span key={t} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
@@ -237,7 +242,30 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
           </section>
 
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <div className="flex items-baseline justify-between">
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f]">From seniors</h3>
+              <Link href="/insights" className="text-sm text-navy hover:underline">
+                Share one ›
+              </Link>
+            </div>
+            <p className="text-xs text-[#86868b]">Unofficial tips from students who worked with or approached them.</p>
+            <div className="mt-3 space-y-2">
+              {insights === null && <p className="text-sm text-[#86868b]">Loading…</p>}
+              {insights?.length === 0 && <p className="text-sm text-[#6e6e73]">No tips yet about this professor.</p>}
+              {insights?.map((i) => (
+                <InsightCard
+                  key={i.id}
+                  compact
+                  insight={i}
+                  onChange={(n) => setInsights((prev) => (prev ?? []).map((x) => (x.id === n.id ? n : x)))}
+                  onRemove={() => setInsights((prev) => (prev ?? []).filter((x) => x.id !== i.id))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f]">
               Sponsored projects {detail ? `(${detail.projects.length})` : ""}
             </h3>
             {!detail && <p className="mt-2 text-sm text-slate-400">Loading…</p>}
@@ -256,7 +284,7 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
 
           {detail && detail.startups.length > 0 && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Startups</h3>
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f]">Startups</h3>
               {detail.startups.map((s) => (
                 <p key={s.name} className="mt-2 text-sm text-slate-700">
                   {s.name}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import InterestInput from "@/components/InterestInput";
-import { api, initials, type User } from "@/lib/api";
+import { API_BASE, api, getToken, initials, type User } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/lib/auth";
 
 interface Status {
@@ -73,15 +73,15 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto grid max-w-6xl grid-cols-[340px_1fr] gap-6 px-8 py-8">
+        <div className="mx-auto grid max-w-[1120px] grid-cols-[340px_1fr] gap-6 px-6 pb-16 pt-10">
           {/* Identity card */}
           <div className="space-y-6">
             <section className="card overflow-hidden text-center">
-              <div className="brand-gradient relative h-24">
+              <div className="relative h-24 bg-gradient-to-b from-[#e8f2fd] to-white">
                 <div className="animate-blob absolute -right-6 -top-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
               </div>
               <div className="relative -mt-11 px-6 pb-6">
-                <div className="brand-gradient mx-auto flex h-22 w-22 items-center justify-center rounded-3xl text-3xl font-bold text-white shadow-xl ring-4 ring-white">
+                <div className="mx-auto flex h-22 w-22 items-center justify-center rounded-full bg-gradient-to-b from-[#b4b4ba] to-[#8e8e93] text-3xl font-medium text-white ring-4 ring-white">
                   {initials(form.name || user.name)}
                 </div>
                 <h1 className="mt-4 text-xl font-bold text-slate-900">{user.name}</h1>
@@ -102,6 +102,8 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
           </div>
 
           <div className="space-y-6">
+            <CvCard user={user} onChange={setUser} />
+            <AlertsCard user={user} onChange={setUser} />
             <section className="card p-6">
               <h2 className="mb-4 font-semibold text-slate-900">Profile details</h2>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -144,7 +146,7 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
                 <button
                   onClick={save}
                   disabled={!dirty || saving}
-                  className="brand-gradient rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:shadow-none"
+                  className="brand-gradient rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 disabled:shadow-none"
                 >
                   {saving ? "Saving…" : "Save changes"}
                 </button>
@@ -159,7 +161,7 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
                 [status?.opportunities ?? "–", "Open adverts"],
               ].map(([value, label]) => (
                 <div key={label as string} className="card p-5 text-center">
-                  <div className="brand-text text-3xl font-bold">{value}</div>
+                  <div className="headline text-[34px]">{value}</div>
                   <div className="mt-1 text-xs text-slate-500">{label}</div>
                 </div>
               ))}
@@ -179,5 +181,123 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function CvCard({ user, onChange }: { user: User; onChange: (u: User) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setError("");
+    try {
+      // Raw PDF body; the backend extracts and keeps only the text.
+      const res = await fetch(`${API_BASE}/api/me/cv`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/pdf",
+          "X-Filename": encodeURIComponent(file.name),
+        },
+        body: file,
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Upload failed");
+      onChange(body as User);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      onChange(await api<User>("/api/me/cv", { method: "DELETE" }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="card flex items-center gap-5 p-6">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-navy-soft text-sm font-semibold text-navy">
+        CV
+      </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="font-semibold text-slate-900">Your CV</h2>
+        {user.cv_filename ? (
+          <p className="truncate text-sm text-slate-500">
+            <span className="font-medium text-emerald-700">✓ {user.cv_filename}</span> · used to personalise answers and
+            email drafts
+          </p>
+        ) : (
+          <p className="text-sm text-slate-500">
+            Upload a PDF so answers and email drafts can mention your real projects and skills.
+          </p>
+        )}
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      </div>
+      <label
+        className={`cursor-pointer rounded-xl px-4 py-2.5 text-sm font-semibold ${
+          user.cv_filename ? "border border-slate-200 text-slate-700 hover:bg-slate-50" : "brand-gradient text-white"
+        } ${busy ? "pointer-events-none opacity-60" : ""}`}
+      >
+        {busy ? "Working…" : user.cv_filename ? "Replace" : "Upload PDF"}
+        <input
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) upload(f);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {user.cv_filename && (
+        <button onClick={remove} disabled={busy} className="text-sm text-slate-400 hover:text-red-600">
+          Remove
+        </button>
+      )}
+    </section>
+  );
+}
+
+function AlertsCard({ user, onChange }: { user: User; onChange: (u: User) => void }) {
+  const [busy, setBusy] = useState(false);
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      onChange(await api<User>("/api/me", { method: "PUT", body: JSON.stringify({ email_alerts: !user.email_alerts }) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card flex items-center gap-5 p-6">
+      <div className="min-w-0 flex-1">
+        <h2 className="font-semibold text-[#1d1d1f]">Email alerts</h2>
+        <p className="text-sm text-[#6e6e73]">
+          A daily email when new openings, projects or notices match your interests, plus follow-up reminders.
+        </p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={user.email_alerts}
+        aria-label="Email alerts"
+        disabled={busy}
+        onClick={toggle}
+        className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition ${user.email_alerts ? "bg-[#34c759]" : "bg-[#e5e5ea]"}`}
+      >
+        <span
+          className={`absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow transition-all ${
+            user.email_alerts ? "left-[22px]" : "left-[2px]"
+          }`}
+        />
+      </button>
+    </section>
   );
 }

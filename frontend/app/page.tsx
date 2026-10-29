@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import AppShell, { OpeningCard } from "@/components/AppShell";
 import { ArrowRightIcon, ChatIcon, ClockIcon, FlaskIcon, MailIcon, SendIcon, SparkIcon, UsersIcon } from "@/components/icons";
 import { FacultyPhoto, MatchRing, SectionTitle, plural, reasonTopic } from "@/components/ui";
-import { api, askUrl, type HomeData } from "@/lib/api";
+import UpdateList from "@/components/UpdateList";
+import { api, askUrl, type HomeData, type UpdateItem } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 
 function greeting() {
@@ -18,12 +19,14 @@ export default function HomePage() {
   const user = useRequireAuth();
   const router = useRouter();
   const [data, setData] = useState<HomeData | null>(null);
+  const [updates, setUpdates] = useState<UpdateItem[] | null>(null);
   const [question, setQuestion] = useState("");
 
   const interestsKey = user?.interests.join("|");
   useEffect(() => {
     if (!user) return;
     api<HomeData>("/api/home").then(setData);
+    api<UpdateItem[]>("/api/updates?days=30").then(setUpdates).catch(() => setUpdates([]));
   }, [user, interestsKey]);
 
   if (!user) return null;
@@ -35,56 +38,53 @@ export default function HomePage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-8 py-8">
+        <div className="mx-auto max-w-[1120px] px-6 pb-16 pt-4">
           {/* Hero */}
-          <section className="brand-gradient relative overflow-hidden rounded-[28px] px-10 py-10 text-white shadow-xl shadow-indigo-500/20">
-            <div className="animate-blob pointer-events-none absolute -right-10 -top-16 h-64 w-64 rounded-full bg-white/15 blur-2xl" />
-            <div className="animate-blob pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-fuchsia-300/20 blur-2xl [animation-delay:-5s]" />
-            <div className="relative max-w-3xl">
-              <p className="text-sm font-medium text-indigo-100">
-                {greeting()}, {first}
-              </p>
-              <h1 className="mt-1 text-[34px] font-bold leading-tight tracking-tight">
-                What would you like to explore in ECE today?
-              </h1>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  ask(question);
-                }}
-                className="mt-6 flex items-center gap-2 rounded-2xl bg-white p-2 shadow-lg shadow-indigo-900/20"
+          <section className="animate-fade-up px-4 pb-4 pt-10 text-center">
+            <p className="text-[17px] font-medium text-[#6e6e73]">
+              {greeting()}, {first}.
+            </p>
+            <h1 className="headline mx-auto mt-2 max-w-3xl text-[52px] leading-[1.06]">
+              Explore ECE. <span className="brand-text">Ask anything.</span>
+            </h1>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                ask(question);
+              }}
+              className="mx-auto mt-9 flex max-w-2xl items-center gap-2 rounded-full border border-black/[0.08] bg-white py-2 pl-6 pr-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.12)] focus-within:border-indigo-300"
+            >
+              <SparkIcon className="h-5 w-5 text-[#86868b]" />
+              <input
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Professors, labs, projects, admissions, openings…"
+                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[17px] text-[#1d1d1f] outline-none placeholder:text-[#86868b]"
+              />
+              <button
+                type="submit"
+                disabled={!question.trim()}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-white transition hover:bg-navy-dark disabled:bg-[#e5e5ea] disabled:text-[#86868b]"
+                aria-label="Ask"
               >
-                <SparkIcon className="ml-3 h-5 w-5 text-indigo-500" />
-                <input
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="Ask about professors, labs, projects, admissions or openings…"
-                  className="min-w-0 flex-1 bg-transparent px-2 py-2.5 text-[15px] text-slate-800 outline-none placeholder:text-slate-400"
-                />
+                <SendIcon className="h-4 w-4" />
+              </button>
+            </form>
+            <div className="mx-auto mt-5 flex max-w-3xl flex-wrap justify-center gap-2">
+              {(data?.questions ?? []).slice(0, 4).map((q) => (
                 <button
-                  type="submit"
-                  disabled={!question.trim()}
-                  className="brand-gradient flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-semibold text-white disabled:opacity-60"
+                  key={q}
+                  onClick={() => ask(q)}
+                  className="rounded-full bg-black/[0.04] px-4 py-2 text-[13px] text-[#1d1d1f] transition hover:bg-black/[0.08]"
                 >
-                  Ask <SendIcon className="h-4 w-4" />
+                  {q}
                 </button>
-              </form>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(data?.questions ?? []).slice(0, 4).map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => ask(q)}
-                    className="rounded-full bg-white/15 px-3.5 py-1.5 text-left text-[13px] text-white backdrop-blur transition hover:bg-white/25"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
           </section>
 
           {/* Stats */}
-          <section className="mt-6 grid grid-cols-4 gap-4">
+          <section className="mt-10 grid grid-cols-4 gap-4">
             <Stat icon={UsersIcon} tone="indigo" value={data ? data.matches.length : "–"} label="Professors matched to you" />
             <Stat icon={FlaskIcon} tone="violet" value={user.interests.length} label="Research interests" />
             <Stat icon={MailIcon} tone="sky" value={data ? sent : "–"} label="Outreach emails sent" />
@@ -117,7 +117,7 @@ export default function HomePage() {
                       Add research interests and we&apos;ll match you with professors, projects and openings.
                     </p>
                   </div>
-                  <Link href="/profile" className="brand-gradient shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-white">
+                  <Link href="/profile" className="brand-gradient shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white">
                     Add interests
                   </Link>
                 </div>
@@ -132,7 +132,7 @@ export default function HomePage() {
                   {data.matches.map((f, i) => (
                     <div key={f.id} className="card card-hover animate-fade-up flex flex-col p-5" style={{ animationDelay: `${i * 50}ms` }}>
                       <div className="flex items-start gap-4">
-                        <FacultyPhoto name={f.name} src={f.image_url} />
+                        <FacultyPhoto name={f.name} src={f.image_url} className="h-14 w-14 rounded-full" />
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-semibold text-slate-900">Prof. {f.name}</div>
                           <div className="text-xs text-slate-500">{f.designation}</div>
@@ -202,6 +202,27 @@ export default function HomePage() {
               </section>
 
               <section>
+                <SectionTitle
+                  action={
+                    <Link href="/updates" className="text-sm text-navy hover:underline">
+                      See all ›
+                    </Link>
+                  }
+                >
+                  What&apos;s new
+                </SectionTitle>
+                <div className="card px-5">
+                  {updates === null ? (
+                    <p className="py-4 text-sm text-[#86868b]">Loading…</p>
+                  ) : updates.length === 0 ? (
+                    <p className="py-4 text-sm text-[#6e6e73]">Changes on the ECE website show up here after each crawl.</p>
+                  ) : (
+                    <UpdateList compact items={[...updates].sort((a, b) => Number(b.for_you) - Number(a.for_you)).slice(0, 4)} />
+                  )}
+                </div>
+              </section>
+
+              <section>
                 <SectionTitle>Openings for you</SectionTitle>
                 <div className="space-y-3">
                   {data?.openings.slice(0, 3).map((o) => <OpeningCard key={o.id} o={o} />)}
@@ -216,33 +237,19 @@ export default function HomePage() {
   );
 }
 
-const TONES = {
-  indigo: "bg-indigo-50 text-indigo-600",
-  violet: "bg-violet-50 text-violet-600",
-  sky: "bg-sky-50 text-sky-600",
-  amber: "bg-amber-50 text-amber-600",
-};
-
 function Stat({
-  icon: Icon,
   value,
   label,
-  tone,
 }: {
-  icon: (p: { className?: string }) => React.ReactNode;
+  icon?: unknown;
   value: number | string;
   label: string;
-  tone: keyof typeof TONES;
+  tone?: string;
 }) {
   return (
-    <div className="card flex items-center gap-4 p-5">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${TONES[tone]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <div className="text-2xl font-bold tracking-tight text-slate-900">{value}</div>
-        <div className="text-xs text-slate-500">{label}</div>
-      </div>
+    <div className="card p-6">
+      <div className="headline text-[40px] leading-none">{value}</div>
+      <div className="mt-2 text-sm text-[#6e6e73]">{label}</div>
     </div>
   );
 }

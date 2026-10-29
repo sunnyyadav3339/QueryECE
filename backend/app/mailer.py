@@ -1,5 +1,6 @@
-"""Outgoing email (sign-up verification codes) over SMTP, with a log fallback."""
+"""Outgoing email over SMTP, with a log fallback for local demos."""
 
+import html
 import logging
 import smtplib
 import ssl
@@ -18,37 +19,47 @@ def smtp_configured() -> bool:
     return bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
 
 
-def send_verification_code(to: str, name: str, code: str, minutes: int) -> None:
-    """Blocking; call from a worker thread."""
-    if not smtp_configured():
-        # Local demo mode: no mail server, so show the code to whoever runs the backend.
-        log.warning("SMTP not configured. Verification code for %s: %s", to, code)
-        return
-
-    msg = EmailMessage()
-    msg["Subject"] = f"{code} is your QueryECE verification code"
-    msg["From"] = f"QueryECE <{SMTP_FROM}>"
-    msg["To"] = to
-    first = name.split()[0] if name.strip() else "there"
-    msg.set_content(
-        f"Hi {first},\n\nYour QueryECE verification code is {code}.\n"
-        f"It expires in {minutes} minutes.\n\nIf you didn't sign up for QueryECE, ignore this email.\n"
+def _wrap(body_html: str) -> str:
+    return (
+        '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:480px;margin:0 auto;'
+        'padding:32px;color:#1d1d1f"><div style="font-size:20px;font-weight:700;color:#1d1d1f">QueryECE</div>'
+        f"{body_html}</div>"
     )
-    msg.add_alternative(f"""\
-<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:460px;margin:0 auto;padding:32px;color:#0f172a">
-  <div style="font-size:20px;font-weight:700;color:#4338ca">QueryECE</div>
-  <p style="margin-top:24px">Hi {first},</p>
-  <p>Use this code to verify your email address:</p>
-  <div style="font-size:34px;font-weight:700;letter-spacing:10px;background:#eef2ff;color:#312e81;
-              border-radius:12px;padding:18px 0;text-align:center;margin:20px 0">{code}</div>
-  <p style="color:#64748b;font-size:14px">It expires in {minutes} minutes. If you didn't sign up for QueryECE, you can ignore this email.</p>
-</div>""", subtype="html")
 
+
+def send_email(to: str, subject: str, text: str, body_html: str) -> None:
+    """Blocking; call from a worker thread. Raises MailError on failure."""
+    if not smtp_configured():
+        log.warning("SMTP not configured. Email to %s: %s\n%s", to, subject, text)
+        return
+    msg = EmailMessage()
+    msg["Subject"], msg["From"], msg["To"] = subject, f"QueryECE <{SMTP_FROM}>", to
+    msg.set_content(text)
+    msg.add_alternative(_wrap(body_html), subtype="html")
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
             smtp.starttls(context=ssl.create_default_context())
             smtp.login(SMTP_USER, SMTP_PASSWORD)
             smtp.send_message(msg)
     except (smtplib.SMTPException, OSError) as exc:
-        log.exception("sending verification email to %s failed", to)
-        raise MailError("Couldn't send the verification email. Please try again in a moment.") from exc
+        log.exception("sending email to %s failed", to)
+        raise MailError("Couldn't send the email. Please try again in a moment.") from exc
+
+
+def send_code(to: str, name: str, code: str, minutes: int, purpose: str = "verify") -> None:
+    first = html.escape(name.split()[0] if name.strip() else "there")
+    action = "reset your password" if purpose == "reset" else "verify your email address"
+    if not smtp_configured():
+        log.warning("SMTP not configured. %s code for %s: %s", purpose, to, code)
+        return
+    send_email(
+        to,
+        f"{code} is your QueryECE {'password reset' if purpose == 'reset' else 'verification'} code",
+        f"Hi {first},\n\nUse {code} to {action}. It expires in {minutes} minutes.\n\n"
+        "If you didn't request this, ignore this email.\n",
+        f'<p style="margin-top:24px">Hi {first},</p><p>Use this code to {action}:</p>'
+        '<div style="font-size:34px;font-weight:700;letter-spacing:10px;background:#f5f5f7;color:#1d1d1f;'
+        f'border-radius:12px;padding:18px 0;text-align:center;margin:20px 0">{code}</div>'
+        f'<p style="color:#64748b;font-size:14px">It expires in {minutes} minutes. '
+        "If you didn't request this, you can ignore this email.</p>",
+    )

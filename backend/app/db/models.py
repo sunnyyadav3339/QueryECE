@@ -39,6 +39,10 @@ class User(Base):
     interests = Column(JSON, nullable=False, default=list)
     # server_default=1: accounts created before OTP verification existed stay usable.
     email_verified = Column(Boolean, nullable=False, default=False, server_default="1")
+    cv_text = Column(Text)  # extracted from the uploaded CV (PDF); the file itself isn't kept
+    cv_filename = Column(String)
+    email_alerts = Column(Boolean, nullable=False, default=True, server_default="1")  # daily "what's new" digest
+    last_digest_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
@@ -47,7 +51,8 @@ class User(Base):
 
 
 class EmailCode(Base):
-    """One-time sign-up verification code (stored hashed). One live code per user."""
+    """One-time code (stored hashed), one live code per user: verifies the email of an
+    unverified account, or resets the password of a verified one."""
 
     __tablename__ = "email_codes"
 
@@ -109,10 +114,52 @@ class Outreach(Base):
     notes = Column(Text, nullable=False, default="")
     sent_on = Column(Date)
     follow_up_on = Column(Date)
+    reminded_on = Column(Date)  # last follow-up reminder email, so each due date is mailed once
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user = relationship("User", back_populates="outreach")
+
+
+class Insight(Base):
+    """A senior's tip that isn't on any website (a professor, BTP, course, interview...)."""
+
+    __tablename__ = "insights"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category = Column(String, nullable=False)  # see routers/insights.py CATEGORIES
+    faculty_id = Column(Integer, index=True)  # optional; no FK, faculty rows are re-created by the crawler
+    subject = Column(String)  # e.g. a course code or topic
+    body = Column(Text, nullable=False)
+    anonymous = Column(Boolean, nullable=False, default=False)
+    hidden = Column(Boolean, nullable=False, default=False)  # set by moderation or 3 reports
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+
+    user = relationship("User")
+    votes = relationship("InsightVote", cascade="all, delete-orphan")
+
+
+class InsightVote(Base):
+    __tablename__ = "insight_votes"
+
+    insight_id = Column(Integer, ForeignKey("insights.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    kind = Column(String, primary_key=True)  # "helpful" | "report"
+
+
+class Update(Base):
+    """A change noticed by the crawler, for the "What's new" feed and alert emails."""
+
+    __tablename__ = "updates"
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String, nullable=False)  # new_page | updated_page | new_opening | new_project
+    title = Column(String, nullable=False)
+    url = Column(String)
+    detail = Column(Text)  # what changed / short description
+    faculty_id = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 # ---------------------------------------------------------------------------

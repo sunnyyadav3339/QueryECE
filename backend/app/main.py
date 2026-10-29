@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 import threading
 from contextlib import asynccontextmanager
 
@@ -10,7 +11,8 @@ from app.config import CORS_ORIGINS, CRAWL_INTERVAL_HOURS, ENABLE_SCHEDULER, GRO
 from app.db.database import SessionLocal, init_db
 from app.db.models import Page
 from app.ingest.pipeline import run_pipeline
-from app.routers import auth, chats, data, discover, outreach
+from app.reminders import send_digests, send_due_reminders
+from app.routers import auth, chats, data, discover, insights, outreach, updates
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("queryece")
@@ -23,6 +25,14 @@ def _safe_crawl():
         log.exception("scheduled crawl failed")
 
 
+def _safe_reminders():
+    try:
+        send_due_reminders()
+        send_digests()
+    except Exception:
+        log.exception("follow-up reminders failed")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
@@ -33,6 +43,9 @@ async def lifespan(_app: FastAPI):
         scheduler = BackgroundScheduler(daemon=True)
         scheduler.add_job(_safe_crawl, "interval", hours=CRAWL_INTERVAL_HOURS, id="crawl",
                           max_instances=1, coalesce=True)
+        # Follow-up reminders: soon after start, then every 6 h (each due date is mailed once).
+        scheduler.add_job(_safe_reminders, "interval", hours=6, id="reminders", max_instances=1,
+                          coalesce=True, next_run_time=datetime.now() + timedelta(minutes=1))
         scheduler.start()
         with SessionLocal() as db:
             empty = db.query(Page).count() == 0
@@ -56,6 +69,8 @@ app.include_router(chats.router)
 app.include_router(data.router)
 app.include_router(outreach.router)
 app.include_router(discover.router)
+app.include_router(insights.router)
+app.include_router(updates.router)
 
 
 @app.get("/")

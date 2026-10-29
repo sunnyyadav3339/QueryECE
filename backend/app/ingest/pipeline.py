@@ -12,7 +12,7 @@ import threading
 from datetime import datetime, timezone
 
 from app.db.database import SessionLocal, init_db
-from app.db.models import Chunk, CrawlRun, Faculty, Opportunity, Page, Project, Startup
+from app.db.models import Chunk, CrawlRun, Faculty, Opportunity, Page, Project, Startup, Update
 from app.ingest.photos import sync_photos
 from app.ingest import extractors
 from app.ingest.crawler import FetchedPage, crawl, fetch_bytes, page_category
@@ -34,10 +34,21 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-def _store_page(db, fetched: FetchedPage, category: str | None = None) -> tuple[Page, bool]:
-    """Upsert a page; re-index it if its text changed. Returns (page, changed)."""
+def _changed_lines(old: str, new: str, limit: int = 4) -> str:
+    """The substantive lines that appear in the new text but not the old one."""
+    before = set((old or "").splitlines())
+    added = [ln.strip() for ln in new.splitlines() if ln.strip() not in before and len(ln.strip()) > 25]
+    return "\n".join(added[:limit])[:600]
+
+
+def _store_page(db, fetched: FetchedPage, category: str | None = None, record: bool = False) -> tuple[Page, bool]:
+    """Upsert a page; re-index it if its text changed. Returns (page, changed).
+
+    With record=True, a new or changed page is also logged to the "What's new" feed.
+    """
     digest = hashlib.sha256(fetched.text.encode()).hexdigest()
     page = db.query(Page).filter_by(url=fetched.url).first()
+    is_new = page is None
     if page is None:
         page = Page(url=fetched.url)
         db.add(page)
@@ -49,6 +60,11 @@ def _store_page(db, fetched: FetchedPage, category: str | None = None) -> tuple[
     if not changed:
         return page, False
 
+    if record:
+        detail = fetched.text[:300] if is_new else _changed_lines(page.text, fetched.text)
+        if is_new or detail:  # skip pure markup/whitespace changes
+            db.add(Update(kind="new_page" if is_new else "updated_page", title=fetched.title or fetched.url,
+                          url=fetched.url, detail=detail))
     page.text = fetched.text
     page.content_hash = digest
     page.changed_at = _now()
@@ -83,13 +99,18 @@ def _resolver(db):
     return extractors.FacultyResolver([(f.id, f.name) for f in db.query(Faculty).all()])
 
 
-def _refresh_projects(db, records):
+def _refresh_projects(db, records, record: bool = False):
     if not records:
         return
     resolver = _resolver(db)
+    known = {t for (t,) in db.query(Project.title)}
     db.query(Project).delete()  # the source table is the full list; replace wholesale
     for rec in records:
-        db.add(Project(**rec, faculty_id=resolver.resolve(rec["faculty_raw"] or "")))
+        fid = resolver.resolve(rec["faculty_raw"] or "")
+        db.add(Project(**rec, faculty_id=fid))
+        if record and rec["title"] not in known:
+            db.add(Update(kind="new_project", title=rec["title"][:300], faculty_id=fid,
+                          detail=f"{rec.get('faculty_raw') or ''} · {rec.get('agency') or ''} · {rec.get('year') or ''}"))
 
 
 def _refresh_startups(db, records):
@@ -101,7 +122,7 @@ def _refresh_startups(db, records):
         db.add(Startup(**rec, faculty_id=resolver.resolve(rec["founder_raw"] or "")))
 
 
-def _refresh_opportunities(db, records):
+def _refresh_opportunities(db, records, record: bool = False):
     if not records:
         return
     seen = set()
@@ -111,6 +132,9 @@ def _refresh_opportunities(db, records):
         if opp is None:
             opp = Opportunity(**rec)
             db.add(opp)
+            if record:
+                db.add(Update(kind="new_opening", title=rec["title"][:300], url=rec["url"],
+                              detail=" · ".join(x for x in (rec.get("kind"), rec.get("department"), rec.get("deadline")) if x)))
         else:
             for key, value in rec.items():
                 setattr(opp, key, value)
@@ -142,11 +166,13 @@ def run_pipeline(max_pages: int | None = None) -> dict:
     db.commit()
     try:
         seen_urls: set[str] = set()
+        # The first crawl would log every page as "new"; only record changes after that.
+        record = db.query(CrawlRun).filter_by(status="ok").count() > 0
         structured = {"faculty": [], "projects": [], "startups": [], "opportunities": []}
         kwargs = {"max_pages": max_pages} if max_pages else {}
         for fetched in crawl(**kwargs):
             seen_urls.add(fetched.url)
-            _page, changed = _store_page(db, fetched)
+            _page, changed = _store_page(db, fetched, record=record)
             run.pages_fetched += 1
             run.pages_changed += int(changed)
             if fetched.soup is not None:
@@ -169,9 +195,9 @@ def run_pipeline(max_pages: int | None = None) -> dict:
         except Exception:  # photos are cosmetic; never fail the crawl over them
             log.exception("photo sync failed")
             photos = {"error": True}
-        _refresh_projects(db, structured["projects"])
+        _refresh_projects(db, structured["projects"], record)
         _refresh_startups(db, structured["startups"])
-        _refresh_opportunities(db, structured["opportunities"])
+        _refresh_opportunities(db, structured["opportunities"], record)
 
         # Retire pages that disappeared from the site. Skip on a suspiciously
         # small crawl (site outage) so a bad run can't wipe the index.

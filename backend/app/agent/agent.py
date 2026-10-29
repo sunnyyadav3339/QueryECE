@@ -51,16 +51,21 @@ How to use tools:
 - find_faculty: a person by name, or faculty matching a research topic.
 - list_sponsored_projects: funded projects/grants by PI, keyword, agency or year.
 - list_opportunities: open RA / JRF / project-staff / post-doc adverts.
+- search_senior_insights: tips from IITR seniors that aren't on any website (what a professor looks for, how they reply, BTP/course/interview experiences). Call it, in addition to the official tools, for advice, "what is it like" or "how do I approach" questions. Present what it returns under a separate heading "**From seniors (unofficial)**", citing each tip, and never state it as an official fact or mix it into official details.
 - search_department_info: everything else (programmes, admissions, courses, labs, research groups, contacts, faculty publications/students/patents/awards, news).
 - Usually one tool call is enough; make another only if the first result is insufficient. Write self-contained queries (resolve "he", "the second one" from the conversation).
 
-Personalise every answer to this student (profile below):
+Answer exactly what was asked:
+- First decide what kind of question it is. Factual questions (dates, deadlines, fees, courses, syllabus, admissions steps, contacts, labs, events, rules) get a direct, complete answer and nothing else: no professor recommendations, no ★, no research suggestions, no "For you" line.
 - Keep the useful specifics from tool results (names, emails, links, project titles, dates); don't summarise them away.
-- When you list faculty, projects, labs or openings, put the ones that fit the student's interests first and mark each with ★ plus a few words on why (e.g. "★ fits your Signal Processing interest").
-- For open-ended requests ("who should I approach", "suggest", "what can I do"), start from the matched professors below, then use tools to back up the details you state.
+
+Personalise only when the student asks for advice or discovery ("who should I approach", "suggest", "which lab fits me", "what can I do", "recommend") or asks about faculty/projects/openings in general:
+- Put the ones that fit the student's interests first and mark each with ★ plus a few words on why (e.g. "★ fits your Signal Processing interest").
+- For open-ended requests, start from the matched professors below, then use tools to back up the details you state. You may also draw on the student's CV excerpt.
 - Fit advice to their stage: B.Tech students → BTP, summer internships, small projects; M.Tech → thesis topics; PhD → research groups and funding.
-- Use their first name occasionally, not in every answer.
-- When it adds value, end with one line starting "**For you:**" giving a concrete next step tied to their interests (e.g. a professor to read about, or drafting an email from the Outreach tab). Skip it for plain look-ups such as a date or a phone number.
+- You may end with one line starting "**For you:**" giving a concrete next step tied to their interests.
+
+Use their first name occasionally, not in every answer.
 
 Style: answer what was asked, concisely and skimmably (short paragraphs, bullets, bold names). Include emails and links when useful.
 - People (recommendations, contacts): a bulleted list, one professor per bullet: **Prof. Name** (designation) — ★ why it fits — email. Not a table.
@@ -78,6 +83,8 @@ def _profile_text(user: User, db: Session) -> str:
         lines.append(f"Research interests: {', '.join(user.interests)}")
     if user.bio:
         lines.append(f"About: {user.bio[:400]}")
+    if user.cv_text:
+        lines.append(f"CV excerpt (written by the student):\n{user.cv_text[:1200]}")
     if user.interests:
         matches = personal.profile_matches_text(db.query(Faculty).all(), user.interests)
         if matches:
@@ -229,8 +236,10 @@ async def respond(chat_id: str, user_id: int, text: str) -> AsyncIterator[dict]:
 
 FOLLOWUP_PROMPT = (
     "Suggest exactly 3 follow-up questions this student could ask the IIT Roorkee ECE department "
-    "assistant next. Make them specific to the answer and to the student's interests, at most 12 words "
-    "each, answerable from the department website (faculty, projects, labs, admissions, openings). "
+    "assistant next. Stay on the topic of the student's question: natural next questions about the same "
+    "thing (e.g. after a deadline question, ask about documents or venue, not research). Bring in the "
+    "student's interests only if the question was about faculty, projects or advice. At most 12 words "
+    "each, answerable from the department website. "
     "Write them in the student's voice. Output one question per line, nothing else.")
 LIST_MARKER_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
 

@@ -16,7 +16,7 @@ export function FacultyPhoto({
   const [failed, setFailed] = useState(false);
   if (!src || failed) {
     return (
-      <div className={`${className} brand-gradient flex shrink-0 items-center justify-center font-semibold text-white`}>
+      <div className={`${className} flex shrink-0 items-center justify-center bg-gradient-to-b from-[#b4b4ba] to-[#8e8e93] font-medium text-white`}>
         {initials(name)}
       </div>
     );
@@ -37,23 +37,23 @@ export function FacultyPhoto({
 export function MatchRing({ value, size = 48 }: { value: number; size?: number }) {
   const r = (size - 6) / 2;
   const c = 2 * Math.PI * r;
-  const color = value >= 75 ? "#7c3aed" : value >= 50 ? "#4f46e5" : "#94a3b8";
+  const color = value >= 50 ? "#0071e3" : "#86868b";
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }} title={`${value}% match with your interests`}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#eef0f7" strokeWidth={5} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#ececf0" strokeWidth={4} />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
           stroke={color}
-          strokeWidth={5}
+          strokeWidth={4}
           strokeLinecap="round"
           strokeDasharray={`${(c * value) / 100} ${c}`}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-slate-700">
+      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-[#1d1d1f]">
         {value}%
       </span>
     </div>
@@ -62,7 +62,7 @@ export function MatchRing({ value, size = 48 }: { value: number; size?: number }
 
 export function UserAvatar({ name, className = "h-9 w-9 text-sm" }: { name: string; className?: string }) {
   return (
-    <div className={`${className} brand-gradient flex shrink-0 items-center justify-center rounded-full font-semibold text-white`}>
+    <div className={`${className} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#b4b4ba] to-[#8e8e93] font-medium text-white`}>
       {initials(name)}
     </div>
   );
@@ -70,8 +70,8 @@ export function UserAvatar({ name, className = "h-9 w-9 text-sm" }: { name: stri
 
 export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="mb-4 flex items-end justify-between gap-4">
-      <h2 className="text-lg font-semibold tracking-tight text-slate-900">{children}</h2>
+    <div className="mb-5 flex items-end justify-between gap-4">
+      <h2 className="headline text-[28px]">{children}</h2>
       {action}
     </div>
   );

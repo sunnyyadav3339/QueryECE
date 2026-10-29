@@ -58,10 +58,10 @@ export default function OutreachPage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-7xl px-8 py-8">
+        <div className="mx-auto max-w-[1120px] px-6 pb-16 pt-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Professor outreach</h1>
+              <h1 className="headline text-[40px]">Outreach</h1>
               <p className="mt-1 text-sm text-slate-500">
                 Draft personalised emails from each professor&apos;s real research, send them from your own inbox, and
                 track replies.
@@ -69,7 +69,7 @@ export default function OutreachPage() {
             </div>
             <button
               onClick={() => setComposer({ facultyId: null })}
-              className="brand-gradient rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:opacity-95"
+              className="brand-gradient rounded-full px-5 py-2.5 text-sm font-semibold text-white hover:opacity-95"
             >
               + Draft new email
             </button>
@@ -101,7 +101,7 @@ export default function OutreachPage() {
               <div className="mt-5 flex justify-center gap-3">
                 <button
                   onClick={() => setComposer({ facultyId: null })}
-                  className="brand-gradient rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20"
+                  className="brand-gradient rounded-full px-5 py-2.5 text-sm font-semibold text-white"
                 >
                   Draft your first email
                 </button>
@@ -115,7 +115,7 @@ export default function OutreachPage() {
               {STATUSES.map((s) => {
                 const col = cards.filter((c) => c.status === s);
                 return (
-                  <section key={s} className="min-w-[200px] flex-1 rounded-2xl border border-slate-200/70 bg-white/50 p-3">
+                  <section key={s} className="min-w-[170px] flex-1 rounded-[18px] bg-black/[0.03] p-3">
                     <h2 className="mb-3 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-600">
                       <span className={`h-2 w-2 rounded-full ${STATUS_META[s].dot}`} />
                       {STATUS_META[s].label}
@@ -312,7 +312,7 @@ function Composer({
           <button
             onClick={generate}
             disabled={!facultyId || busy}
-            className="brand-gradient rounded-xl px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="brand-gradient rounded-full px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             {busy ? "Writing…" : "Generate draft"}
           </button>
@@ -468,7 +468,7 @@ function Editor({
               href={gmail}
               target="_blank"
               rel="noreferrer"
-              className="brand-gradient rounded-xl px-4 py-2 text-sm font-semibold text-white"
+              className="brand-gradient rounded-full px-4 py-2 text-sm font-semibold text-white"
             >
               Open in Gmail
             </a>
@@ -540,7 +540,7 @@ function Editor({
             <button
               onClick={() => patch({ subject, body, notes }, "Saving…")}
               disabled={!dirty || !!busy}
-              className="brand-gradient rounded-xl px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="brand-gradient rounded-full px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               Save
             </button>

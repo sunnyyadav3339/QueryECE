@@ -36,6 +36,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
@@ -73,60 +74,61 @@ export default function LoginPage() {
   };
 
   const input =
-    "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10";
+    "w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-[15px] outline-none transition focus:border-navy focus:ring-4 focus:ring-navy/15";
 
   return (
     <main className="flex h-full">
       {/* Brand panel */}
-      <section className="relative hidden w-[52%] flex-col justify-between overflow-hidden bg-ink p-12 text-white lg:flex">
-        <div className="animate-blob pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-indigo-600/40 blur-3xl" />
-        <div className="animate-blob pointer-events-none absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-fuchsia-600/30 blur-3xl [animation-delay:-6s]" />
-        <div className="animate-blob pointer-events-none absolute right-1/3 top-1/3 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl [animation-delay:-3s]" />
+      <section className="relative hidden w-[52%] flex-col justify-between bg-[#f5f5f7] p-14 lg:flex">
+        <Logo />
 
-        <div className="relative">
-          <Logo />
-        </div>
-
-        <div className="relative max-w-lg">
-          <h1 className="text-[44px] font-bold leading-[1.1] tracking-tight">
-            Your research co-pilot for <span className="brand-text">ECE at IIT Roorkee</span>
+        <div className="max-w-lg">
+          <h1 className="headline text-[56px] leading-[1.05]">
+            Your research copilot. <span className="brand-text">For ECE at IIT Roorkee.</span>
           </h1>
-          <p className="mt-4 text-lg text-slate-300">
+          <p className="mt-6 text-[19px] leading-relaxed text-[#6e6e73]">
             Discover professors, projects and openings that fit you, and turn curiosity into a conversation with faculty.
           </p>
-          <div className="mt-10 space-y-5">
+          <div className="mt-12 space-y-6">
             {FEATURES.map(({ icon: Icon, title, text }) => (
               <div key={title} className="flex gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/10">
-                  <Icon className="h-5 w-5 text-indigo-200" />
-                </div>
+                <Icon className="mt-0.5 h-6 w-6 shrink-0 text-navy" />
                 <div>
-                  <div className="font-semibold">{title}</div>
-                  <div className="text-sm text-slate-400">{text}</div>
+                  <div className="text-[17px] font-semibold text-[#1d1d1f]">{title}</div>
+                  <div className="text-[15px] text-[#6e6e73]">{text}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative grid grid-cols-3 gap-4">
+        <div className="flex gap-12">
           {[
             [status?.pages, "pages indexed"],
             [status?.faculty, "faculty profiles"],
             [status?.projects, "sponsored projects"],
           ].map(([v, label]) => (
-            <div key={label as string} className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur">
-              <div className="text-2xl font-bold">{v ?? "–"}</div>
-              <div className="text-xs text-slate-400">{label}</div>
+            <div key={label as string}>
+              <div className="headline text-[34px] leading-none">{v ?? "–"}</div>
+              <div className="mt-1.5 text-sm text-[#86868b]">{label}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* Form panel */}
-      <section className="flex flex-1 items-center justify-center overflow-y-auto px-8 py-10">
+      <section className="flex flex-1 items-center justify-center overflow-y-auto bg-white px-8 py-10">
         <div className="w-full max-w-md">
-          {verifyEmail ? (
+          {forgot ? (
+            <ForgotStep
+              initialEmail={email}
+              onBack={() => setForgot(false)}
+              onDone={(res) => {
+                login(res.token!, res.user!);
+                router.replace("/");
+              }}
+            />
+          ) : verifyEmail ? (
             <OtpStep
               email={verifyEmail}
               onBack={() => setVerifyEmail(null)}
@@ -137,7 +139,7 @@ export default function LoginPage() {
             />
           ) : (
             <>
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+              <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
                 {mode === "login" ? "Welcome back" : "Create your account"}
               </h2>
               <p className="mt-2 text-sm text-slate-500">
@@ -146,7 +148,7 @@ export default function LoginPage() {
                   : "We'll verify your email with a one-time code."}
               </p>
 
-              <div className="mt-8 grid grid-cols-2 rounded-xl bg-slate-200/60 p-1 text-sm font-medium">
+              <div className="mt-8 grid grid-cols-2 rounded-full bg-[#f2f2f4] p-1 text-sm font-medium">
                 {(["login", "register"] as Mode[]).map((m) => (
                   <button
                     key={m}
@@ -155,7 +157,7 @@ export default function LoginPage() {
                       setMode(m);
                       setError("");
                     }}
-                    className={`rounded-lg py-2 transition ${mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                    className={`rounded-full py-2 transition ${mode === m ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}
                   >
                     {m === "login" ? "Sign in" : "Create account"}
                   </button>
@@ -171,7 +173,17 @@ export default function LoginPage() {
                 <Field label="Email">
                   <input className={input} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </Field>
-                <Field label="Password" hint={mode === "register" ? "At least 8 characters" : undefined}>
+                <Field
+                  label="Password"
+                  hint={mode === "register" ? "At least 8 characters" : undefined}
+                  action={
+                    mode === "login" ? (
+                      <button type="button" onClick={() => setForgot(true)} className="text-xs font-medium text-navy hover:underline">
+                        Forgot password?
+                      </button>
+                    ) : undefined
+                  }
+                >
                   <input
                     className={input}
                     type="password"
@@ -204,7 +216,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="brand-gradient w-full rounded-xl py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:opacity-95 disabled:opacity-60"
+                  className="w-full rounded-full bg-navy py-3 text-[15px] font-medium text-white transition hover:bg-navy-dark transition hover:opacity-95 disabled:opacity-60"
                 >
                   {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
                 </button>
@@ -220,10 +232,23 @@ export default function LoginPage() {
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  action,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-slate-700">{label}</span>
+      <span className="mb-1.5 flex items-center justify-between text-sm font-medium text-slate-700">
+        {label}
+        {action}
+      </span>
       {children}
       {hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
     </label>
@@ -299,10 +324,10 @@ function OtpStep({
 
   return (
     <div className="animate-fade-up">
-      <div className="brand-gradient flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg shadow-indigo-500/30">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-navy-soft text-navy">
         <MailIcon className="h-6 w-6" />
       </div>
-      <h2 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">Check your email</h2>
+      <h2 className="mt-6 text-3xl font-semibold tracking-tight text-slate-900">Check your email</h2>
       <p className="mt-2 text-sm text-slate-500">
         We sent a 6-digit code to <span className="font-semibold text-slate-800">{email}</span>. It expires in 10 minutes.
       </p>
@@ -323,7 +348,7 @@ function OtpStep({
             onKeyDown={(e) => {
               if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
             }}
-            className="h-14 w-14 rounded-2xl border-2 border-slate-200 bg-white text-center text-2xl font-bold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+            className="h-14 w-14 rounded-xl border border-[#d2d2d7] bg-white text-center text-2xl font-semibold text-[#1d1d1f] outline-none transition focus:border-navy focus:ring-4 focus:ring-navy/15"
             aria-label={`Digit ${i + 1}`}
           />
         ))}
@@ -335,7 +360,7 @@ function OtpStep({
       <button
         onClick={() => verify(digits.join(""))}
         disabled={busy || digits.some((d) => !d)}
-        className="brand-gradient mt-6 w-full rounded-xl py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 disabled:opacity-50"
+        className="mt-6 w-full rounded-full bg-navy py-3 text-[15px] font-medium text-white transition hover:bg-navy-dark disabled:opacity-50"
       >
         {busy ? "Verifying…" : "Verify email"}
       </button>
@@ -347,6 +372,113 @@ function OtpStep({
         <button onClick={resend} disabled={cooldown > 0} className="font-medium text-navy disabled:text-slate-400">
           {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ForgotStep({
+  initialEmail,
+  onBack,
+  onDone,
+}: {
+  initialEmail: string;
+  onBack: () => void;
+  onDone: (res: AuthResult) => void;
+}) {
+  const [email, setEmail] = useState(initialEmail);
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const input =
+    "w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-[15px] outline-none transition focus:border-navy focus:ring-4 focus:ring-navy/15";
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sendCode = () =>
+    run(async () => {
+      await api("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email }) });
+      setSent(true);
+    });
+  const reset = () =>
+    run(async () => {
+      onDone(await api<AuthResult>("/api/auth/reset", { method: "POST", body: JSON.stringify({ email, code, password }) }));
+    });
+
+  return (
+    <div className="animate-fade-up">
+      <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Reset your password</h2>
+      <p className="mt-2 text-sm text-slate-500">
+        {sent
+          ? `If ${email} has an account, a 6-digit code is on its way. It expires in 10 minutes.`
+          : "Enter your account email and we'll send you a code."}
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (sent) reset();
+          else sendCode();
+        }}
+        className="mt-8 space-y-4"
+      >
+        <Field label="Email">
+          <input className={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={sent} required />
+        </Field>
+        {sent && (
+          <>
+            <Field label="Code from the email">
+              <input
+                className={`${input} text-center text-lg font-bold tracking-[0.5em]`}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+            </Field>
+            <Field label="New password" hint="At least 8 characters">
+              <input
+                className={input}
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </Field>
+          </>
+        )}
+        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full rounded-full bg-navy py-3 text-[15px] font-medium text-white transition hover:bg-navy-dark disabled:opacity-60"
+        >
+          {busy ? "Please wait…" : sent ? "Set new password" : "Send code"}
+        </button>
+      </form>
+      <div className="mt-5 flex items-center justify-between text-sm">
+        <button onClick={onBack} className="text-slate-500 hover:text-slate-800">
+          ← Back to sign in
+        </button>
+        {sent && (
+          <button onClick={sendCode} disabled={busy} className="font-medium text-navy disabled:text-slate-400">
+            Resend code
+          </button>
+        )}
       </div>
     </div>
   );

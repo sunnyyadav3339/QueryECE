@@ -206,11 +206,11 @@ export default function ChatPage() {
     <AppShell>
       <div className="flex h-full">
         {/* History */}
-        <aside className="flex w-72 shrink-0 flex-col border-r border-slate-200/70 bg-white/60">
+        <aside className="flex w-72 shrink-0 flex-col border-r border-black/[0.06] bg-white/70">
           <div className="p-4">
             <button
               onClick={() => openChat(null)}
-              className="brand-gradient flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition hover:opacity-95"
+              className="brand-gradient flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
             >
               <PlusIcon className="h-4 w-4" /> New chat
             </button>
@@ -222,7 +222,7 @@ export default function ChatPage() {
               <div
                 key={c.id}
                 className={`group mb-0.5 flex items-center rounded-xl ${
-                  c.id === activeId ? "bg-indigo-50 text-indigo-900" : "text-slate-600 hover:bg-slate-100"
+                  c.id === activeId ? "bg-black/[0.05] text-[#1d1d1f]" : "text-[#515154] hover:bg-black/[0.03]"
                 }`}
               >
                 <button onClick={() => openChat(c.id)} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left text-sm" title={c.title}>
@@ -247,11 +247,11 @@ export default function ChatPage() {
             <div className="mx-auto max-w-4xl px-8 pb-10 pt-8">
               {messages.length === 0 ? (
                 <div className="animate-fade-up pt-10 text-center">
-                  <div className="brand-gradient mx-auto flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black text-white shadow-xl shadow-indigo-500/30">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[18px] bg-[#1d1d1f] text-2xl font-semibold text-white">
                     Q
                   </div>
-                  <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">
-                    Hi {firstName}, <span className="brand-text">what are you curious about?</span>
+                  <h1 className="headline mt-6 text-[40px] leading-tight">
+                    Hi {firstName}. <span className="brand-text">What are you curious about?</span>
                   </h1>
                   <p className="mx-auto mt-3 max-w-xl text-[15px] text-slate-500">
                     I answer from the ECE department website (refreshed weekly) and tailor answers to your interests
@@ -262,7 +262,7 @@ export default function ChatPage() {
                       <button
                         key={q}
                         onClick={() => send(q)}
-                        className="card card-hover animate-fade-up flex items-start gap-3 p-4"
+                        className="card card-hover animate-fade-up flex items-start gap-3 p-4 text-left"
                         style={{ animationDelay: `${i * 40}ms` }}
                       >
                         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
@@ -277,14 +277,14 @@ export default function ChatPage() {
                 messages.map((m, i) =>
                   m.role === "user" ? (
                     <div key={m.id} className="animate-fade-up my-6 flex justify-end gap-3">
-                      <div className="brand-gradient max-w-[78%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-3 text-[15px] text-white shadow-md shadow-indigo-500/15">
+                      <div className="brand-gradient max-w-[78%] whitespace-pre-wrap rounded-2xl rounded-br-md px-4 py-3 text-[15px] text-white">
                         {m.content}
                       </div>
                       <UserAvatar name={user.name} className="h-8 w-8 text-xs" />
                     </div>
                   ) : (
                     <div key={m.id} className="animate-fade-up my-6 flex gap-3">
-                      <div className="brand-gradient flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white">
+                      <div className="brand-gradient flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black text-white">
                         Q
                       </div>
                       <div className="min-w-0 flex-1">
@@ -369,7 +369,7 @@ export default function ChatPage() {
           {/* Composer */}
           <div className="px-8 pb-6 pt-2">
             <div className="mx-auto max-w-4xl">
-              <div className="card flex items-end gap-3 p-3 focus-within:border-indigo-300 focus-within:shadow-lg focus-within:shadow-indigo-500/10">
+              <div className="card flex items-end gap-3 p-3 focus-within:border-indigo-300">
                 <textarea
                   ref={textareaRef}
                   rows={1}
@@ -399,7 +399,7 @@ export default function ChatPage() {
                   <button
                     onClick={() => send()}
                     disabled={!input.trim()}
-                    className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-md shadow-indigo-500/25 transition disabled:opacity-40 disabled:shadow-none"
+                    className="brand-gradient flex h-10 w-10 items-center justify-center rounded-full text-white transition disabled:opacity-40 disabled:shadow-none"
                     aria-label="Send"
                   >
                     <SendIcon className="h-4 w-4" />

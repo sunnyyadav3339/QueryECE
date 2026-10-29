@@ -97,3 +97,27 @@ def profile_matches_text(faculty: list[Faculty], interests: list[str], top: int 
         why = "; ".join(f"{x['interest']} ↔ {x['topic']}" for x in r["reasons"]) or ", ".join(r["matched"])
         lines.append(f"- Prof. {f.name} ({r['match']}% match{': ' + why if why else ''})")
     return "\n".join(lines)
+
+
+_text_vecs: dict[tuple[str, int], list[float]] = {}
+TEXT_MATCH_THRESHOLD = 0.62  # relevant items scored >=0.64, unrelated adverts <=0.57
+
+
+def match_texts(items: list[tuple[str, str]], interests: list[str]) -> dict[str, tuple[float, str]]:
+    """Best (similarity, interest) per item key for (key, text) items; vectors are cached."""
+    interests = [i for i in interests if i.strip()]
+    if not interests or not items:
+        return {}
+    with _lock:
+        missing = [(k, t) for k, t in items if (k, hash(t)) not in _text_vecs]
+        if missing:
+            for (k, t), v in zip(missing, embed_passages([t[:800] for _, t in missing])):
+                _text_vecs[(k, hash(t))] = v
+        for i in interests:
+            if i not in _query_vecs:
+                _query_vecs[i] = embed_query(i)
+    out = {}
+    for k, t in items:
+        v = _text_vecs[(k, hash(t))]
+        out[k] = max((cosine(_query_vecs[i], v), i) for i in interests)
+    return out

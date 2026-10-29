@@ -1,64 +1,91 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* "navy" is the primary brand colour (indigo); kept as a name for existing classes. */
-  --color-navy: #4338ca;
-  --color-navy-dark: #312e81;
-  --color-navy-soft: #eef2ff;
-  --color-ink: #0b1020;
-  --color-canvas: #f5f6fb;
-  --font-sans: var(--font-geist-sans);
+  /* Apple-style palette. "navy" is the accent (Apple blue); the indigo scale is
+     remapped to the same blue so every accent class follows it. */
+  --color-navy: #0071e3;
+  --color-navy-dark: #0062c4;
+  --color-navy-soft: #e8f2fd;
+  --color-ink: #1d1d1f;
+  --color-canvas: #f5f5f7;
+  --color-indigo-50: #f0f6fe;
+  --color-indigo-100: #e1eefc;
+  --color-indigo-200: #bcdafa;
+  --color-indigo-300: #8cc0f6;
+  --color-indigo-400: #4a9cf0;
+  --color-indigo-500: #0a84ff;
+  --color-indigo-600: #0071e3;
+  --color-indigo-700: #0062c4;
+  --color-indigo-800: #004f9f;
+  --color-indigo-900: #003a75;
+  --color-slate-900: #1d1d1f;
+  --color-slate-800: #1d1d1f;
+  --color-slate-700: #424245;
+  --color-slate-600: #515154;
+  --color-slate-500: #6e6e73;
+  --color-slate-400: #86868b;
+  --color-slate-300: #c7c7cc;
+  --color-slate-200: #e5e5ea;
+  --color-slate-100: #f2f2f4;
+  --color-slate-50: #f7f7f9;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-inter), "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--color-canvas);
-  color: #1e293b;
+  color: #1d1d1f;
+  letter-spacing: -0.01em;
 }
 
+/* Accent fill: Apple blue (kept as a class name used across the app). */
 .brand-gradient {
-  background-image: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #c026d3 100%);
+  background: #0071e3;
 }
+/* Second half of two-tone headlines ("Hi Riya. What are you curious about?"). */
 .brand-text {
-  background-image: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #86868b;
+}
+.headline {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: #1d1d1f;
 }
 .card {
   background: #fff;
-  border: 1px solid #e7e9f2;
-  border-radius: 1.25rem;
-  box-shadow: 0 1px 2px rgb(16 24 64 / 0.04), 0 8px 24px -12px rgb(16 24 64 / 0.08);
+  border-radius: 18px;
+  border: 1px solid rgb(0 0 0 / 0.04);
 }
 .card-hover {
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease;
 }
 .card-hover:hover {
-  transform: translateY(-2px);
-  border-color: #c7d2fe;
-  box-shadow: 0 2px 4px rgb(16 24 64 / 0.05), 0 18px 40px -16px rgb(67 56 202 / 0.25);
+  transform: scale(1.012);
+  box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.14);
+}
+.glass {
+  background: rgb(251 251 253 / 0.8);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
 @keyframes blob {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -40px) scale(1.08); }
-  66% { transform: translate(-20px, 20px) scale(0.95); }
+  0%, 100% { transform: none; }
 }
-.animate-blob { animation: blob 14s ease-in-out infinite; }
+.animate-blob { display: none; }
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
-.animate-fade-up { animation: fade-up 0.35s ease-out both; }
+.animate-fade-up { animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
 @keyframes shimmer {
   from { background-position: -200% 0; }
   to { background-position: 200% 0; }
 }
 .shimmer-text {
-  background: linear-gradient(90deg, #94a3b8 0%, #4338ca 50%, #94a3b8 100%);
+  background: linear-gradient(90deg, #86868b 0%, #1d1d1f 50%, #86868b 100%);
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
