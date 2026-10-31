@@ -58,10 +58,10 @@ export default function OutreachPage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-[1120px] px-6 pb-16 pt-10">
+        <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-6 md:px-6 md:pt-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="headline text-[40px]">Outreach</h1>
+              <h1 className="headline text-[32px] md:text-[40px]">Outreach</h1>
               <p className="mt-1 text-sm text-slate-500">
                 Draft personalised emails from each professor&apos;s real research, send them from your own inbox, and
                 track replies.

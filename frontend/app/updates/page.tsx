@@ -33,8 +33,8 @@ export default function UpdatesPage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-[860px] px-6 pb-16 pt-10">
-          <h1 className="headline text-[40px] leading-tight">
+        <div className="mx-auto max-w-[860px] px-4 pb-16 pt-6 md:px-6 md:pt-10">
+          <h1 className="headline text-[30px] leading-tight md:text-[40px]">
             What&apos;s new. <span className="brand-text">Without checking every page.</span>
           </h1>
           <p className="mt-3 max-w-2xl text-[17px] text-[#6e6e73]">

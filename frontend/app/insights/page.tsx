@@ -46,8 +46,8 @@ export default function InsightsPage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-[860px] px-6 pb-16 pt-10">
-          <h1 className="headline text-[40px] leading-tight">
+        <div className="mx-auto max-w-[860px] px-4 pb-16 pt-6 md:px-6 md:pt-10">
+          <h1 className="headline text-[30px] leading-tight md:text-[40px]">
             Insights from seniors. <span className="brand-text">Not on any website.</span>
           </h1>
           <p className="mt-3 max-w-2xl text-[17px] text-[#6e6e73]">

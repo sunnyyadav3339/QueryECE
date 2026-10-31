@@ -73,7 +73,7 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto grid max-w-[1120px] grid-cols-[340px_1fr] gap-6 px-6 pb-16 pt-10">
+        <div className="mx-auto grid max-w-[1120px] grid-cols-1 gap-6 px-4 pb-16 pt-6 md:px-6 md:pt-10 lg:grid-cols-[340px_1fr]">
           {/* Identity card */}
           <div className="space-y-6">
             <section className="card overflow-hidden text-center">
@@ -153,7 +153,7 @@ function ProfileView({ user, status }: { user: User; status: Status | null }) {
               </div>
             </section>
 
-            <section className="grid grid-cols-4 gap-4">
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
               {[
                 [user.stats.chats, "Conversations"],
                 [user.stats.questions, "Questions asked"],
@@ -222,7 +222,7 @@ function CvCard({ user, onChange }: { user: User; onChange: (u: User) => void })
   };
 
   return (
-    <section className="card flex items-center gap-5 p-6">
+    <section className="card flex flex-wrap items-center gap-4 p-5 md:flex-nowrap md:gap-5 md:p-6">
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-navy-soft text-sm font-semibold text-navy">
         CV
       </div>

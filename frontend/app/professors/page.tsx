@@ -42,23 +42,23 @@ export default function ProfessorsPage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-[1120px] px-6 pb-16 pt-10">
-          <div className="flex items-end justify-between gap-6">
+        <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-6 md:px-6 md:pt-10">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-6">
             <div>
-              <h1 className="headline text-[40px]">Professors</h1>
+              <h1 className="headline text-[32px] md:text-[40px]">Professors</h1>
               <p className="mt-1 text-sm text-slate-500">
                 {faculty ? `${faculty.length} ECE faculty` : "Loading faculty…"}
                 {user.interests.length > 0 && " · ranked by how well their research matches your interests"}
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm focus-within:border-indigo-300">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm focus-within:border-indigo-300">
                 <SearchIcon className="h-4 w-4 text-slate-400" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search name or topic…"
-                  className="w-64 bg-transparent py-2.5 text-sm outline-none"
+                  className="w-full bg-transparent py-2.5 text-sm outline-none md:w-64"
                 />
               </div>
               <select
@@ -86,7 +86,7 @@ export default function ProfessorsPage() {
             </div>
           )}
 
-          <div className="mt-6 grid grid-cols-3 gap-5">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             {faculty === null &&
               Array.from({ length: 6 }, (_, i) => <div key={i} className="card h-64 animate-pulse bg-white/60" />)}
             {shown.map((f) => (
@@ -173,7 +173,7 @@ function ProfessorPanel({ id, card, onClose }: { id: number; card: FacultyCard |
           <div className="flex items-center gap-5">
             <FacultyPhoto name={name} src={detail?.image_url ?? card?.image_url ?? null} className="h-24 w-24 rounded-full" />
             <div>
-              <h2 className="headline text-[28px]">Prof. {name}</h2>
+              <h2 className="headline text-[22px] md:text-[28px]">Prof. {name}</h2>
               <p className="text-[15px] text-[#6e6e73]">{detail?.designation ?? card?.designation}</p>
               {card && card.match > 0 && (
                 <span className="mt-2 inline-block text-sm font-medium text-navy">

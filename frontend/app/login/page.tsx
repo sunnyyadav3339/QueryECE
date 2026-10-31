@@ -83,7 +83,7 @@ export default function LoginPage() {
         <Logo />
 
         <div className="max-w-lg">
-          <h1 className="headline text-[56px] leading-[1.05]">
+          <h1 className="headline text-[40px] leading-[1.05] xl:text-[56px]">
             Your research copilot. <span className="brand-text">For ECE at IIT Roorkee.</span>
           </h1>
           <p className="mt-6 text-[19px] leading-relaxed text-[#6e6e73]">
@@ -117,7 +117,7 @@ export default function LoginPage() {
       </section>
 
       {/* Form panel */}
-      <section className="flex flex-1 items-center justify-center overflow-y-auto bg-white px-8 py-10">
+      <section className="flex flex-1 items-center justify-center overflow-y-auto bg-white px-5 py-8 md:px-8 md:py-10">
         <div className="w-full max-w-md">
           {forgot ? (
             <ForgotStep
@@ -139,6 +139,10 @@ export default function LoginPage() {
             />
           ) : (
             <>
+              {/* The brand panel is hidden on phones, so show the logo here. */}
+              <div className="mb-8 lg:hidden">
+                <Logo />
+              </div>
               <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
                 {mode === "login" ? "Welcome back" : "Create your account"}
               </h2>
@@ -348,7 +352,7 @@ function OtpStep({
             onKeyDown={(e) => {
               if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
             }}
-            className="h-14 w-14 rounded-xl border border-[#d2d2d7] bg-white text-center text-2xl font-semibold text-[#1d1d1f] outline-none transition focus:border-navy focus:ring-4 focus:ring-navy/15"
+            className="h-14 w-0 min-w-0 flex-1 rounded-xl border border-[#d2d2d7] bg-white text-center text-2xl font-semibold text-[#1d1d1f] outline-none transition focus:border-navy focus:ring-4 focus:ring-navy/15"
             aria-label={`Digit ${i + 1}`}
           />
         ))}

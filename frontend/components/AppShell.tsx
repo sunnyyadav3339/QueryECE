@@ -61,27 +61,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const eceCount = opps?.filter((o) => o.is_ece).length ?? 0;
+  const navLinks = NAV.map(({ href, label }) => (
+    <Link
+      key={href}
+      href={href}
+      className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] transition ${
+        active(href) ? "bg-black/[0.06] font-medium text-[#1d1d1f]" : "text-[#1d1d1f]/70 hover:text-[#1d1d1f]"
+      }`}
+    >
+      {label}
+    </Link>
+  ));
 
   return (
     <div className="flex h-full flex-col">
       <header className="glass sticky top-0 z-30 border-b border-black/[0.06]">
-        <div className="mx-auto flex h-12 max-w-[1120px] items-center justify-between px-6">
+        <div className="mx-auto flex h-12 max-w-[1120px] items-center justify-between px-4 md:px-6">
           <Link href="/">
             <Logo />
           </Link>
-          <nav className="flex items-center gap-1">
-            {NAV.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`rounded-full px-3.5 py-1 text-[13px] transition ${
-                  active(href) ? "bg-black/[0.06] font-medium text-[#1d1d1f]" : "text-[#1d1d1f]/70 hover:text-[#1d1d1f]"
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <nav className="hidden items-center gap-1 md:flex">{navLinks}</nav>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setDrawerOpen(true)}
@@ -117,6 +116,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
+        {/* Phones: the same links as a swipeable row under the bar (like apple.com's local nav). */}
+        <nav className="flex gap-1 overflow-x-auto px-3 pb-2 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+          {navLinks}
+        </nav>
       </header>
 
       <main className="relative min-h-0 flex-1">{children}</main>

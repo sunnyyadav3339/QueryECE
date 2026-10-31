@@ -38,13 +38,13 @@ export default function HomePage() {
   return (
     <AppShell>
       <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-[1120px] px-6 pb-16 pt-4">
+        <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-2 md:px-6 md:pt-4">
           {/* Hero */}
           <section className="animate-fade-up px-4 pb-4 pt-10 text-center">
             <p className="text-[17px] font-medium text-[#6e6e73]">
               {greeting()}, {first}.
             </p>
-            <h1 className="headline mx-auto mt-2 max-w-3xl text-[52px] leading-[1.06]">
+            <h1 className="headline mx-auto mt-2 max-w-3xl text-[34px] leading-[1.08] md:text-[52px] md:leading-[1.06]">
               Explore ECE. <span className="brand-text">Ask anything.</span>
             </h1>
             <form
@@ -84,7 +84,7 @@ export default function HomePage() {
           </section>
 
           {/* Stats */}
-          <section className="mt-10 grid grid-cols-4 gap-4">
+          <section className="mt-8 grid grid-cols-2 gap-3 md:mt-10 md:grid-cols-4 md:gap-4">
             <Stat icon={UsersIcon} tone="indigo" value={data ? data.matches.length : "–"} label="Professors matched to you" />
             <Stat icon={FlaskIcon} tone="violet" value={user.interests.length} label="Research interests" />
             <Stat icon={MailIcon} tone="sky" value={data ? sent : "–"} label="Outreach emails sent" />
@@ -96,7 +96,7 @@ export default function HomePage() {
             />
           </section>
 
-          <div className="mt-8 grid grid-cols-[1fr_340px] gap-8">
+          <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
             {/* Matches */}
             <section>
               <SectionTitle
@@ -122,13 +122,13 @@ export default function HomePage() {
                   </Link>
                 </div>
               ) : data === null ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {[0, 1, 2, 3].map((i) => (
                     <div key={i} className="card h-48 animate-pulse bg-white/60" />
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {data.matches.map((f, i) => (
                     <div key={f.id} className="card card-hover animate-fade-up flex flex-col p-5" style={{ animationDelay: `${i * 50}ms` }}>
                       <div className="flex items-start gap-4">
@@ -248,7 +248,7 @@ function Stat({
 }) {
   return (
     <div className="card p-6">
-      <div className="headline text-[40px] leading-none">{value}</div>
+      <div className="headline text-[30px] leading-none md:text-[40px]">{value}</div>
       <div className="mt-2 text-sm text-[#6e6e73]">{label}</div>
     </div>
   );

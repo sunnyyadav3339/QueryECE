@@ -71,7 +71,7 @@ export function UserAvatar({ name, className = "h-9 w-9 text-sm" }: { name: stri
 export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-5 flex items-end justify-between gap-4">
-      <h2 className="headline text-[28px]">{children}</h2>
+      <h2 className="headline text-[22px] md:text-[28px]">{children}</h2>
       {action}
     </div>
   );

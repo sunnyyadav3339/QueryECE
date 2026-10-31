@@ -52,6 +52,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [faculty, setFaculty] = useState<FacultyLite[]>([]);
   const [starters, setStarters] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false); // phones only
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -60,6 +61,7 @@ export default function ChatPage() {
   const openChat = useCallback(async (id: string | null) => {
     abortRef.current?.abort();
     setActiveId(id);
+    setHistoryOpen(false);
     try {
       if (id) localStorage.setItem(LAST_CHAT_KEY, id);
       else localStorage.removeItem(LAST_CHAT_KEY);
@@ -204,9 +206,14 @@ export default function ChatPage() {
 
   return (
     <AppShell>
-      <div className="flex h-full">
+      <div className="relative flex h-full">
         {/* History */}
-        <aside className="flex w-72 shrink-0 flex-col border-r border-black/[0.06] bg-white/70">
+        {historyOpen && (
+          <div className="absolute inset-0 z-10 bg-black/20 md:hidden" onClick={() => setHistoryOpen(false)} />
+        )}
+        <aside
+          className={`${historyOpen ? "flex" : "hidden"} absolute inset-y-0 left-0 z-20 w-72 shrink-0 flex-col border-r border-black/[0.06] bg-white md:static md:flex md:bg-white/70`}
+        >
           <div className="p-4">
             <button
               onClick={() => openChat(null)}
@@ -243,21 +250,27 @@ export default function ChatPage() {
 
         {/* Conversation */}
         <section className="relative flex min-w-0 flex-1 flex-col">
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="absolute left-3 top-3 z-[5] flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#1d1d1f] shadow-sm ring-1 ring-black/[0.06] md:hidden"
+          >
+            <ChatIcon className="h-3.5 w-3.5" /> Chats
+          </button>
           <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-4xl px-8 pb-10 pt-8">
+            <div className="mx-auto max-w-4xl px-4 pb-10 pt-12 md:px-8 md:pt-8">
               {messages.length === 0 ? (
                 <div className="animate-fade-up pt-10 text-center">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[18px] bg-[#1d1d1f] text-2xl font-semibold text-white">
                     Q
                   </div>
-                  <h1 className="headline mt-6 text-[40px] leading-tight">
+                  <h1 className="headline mt-6 text-[28px] leading-tight md:text-[40px]">
                     Hi {firstName}. <span className="brand-text">What are you curious about?</span>
                   </h1>
                   <p className="mx-auto mt-3 max-w-xl text-[15px] text-slate-500">
                     I answer from the ECE department website (refreshed weekly) and tailor answers to your interests
                     {user.interests.length ? `: ${user.interests.slice(0, 3).join(", ")}` : ""}.
                   </p>
-                  <div className="mt-10 grid grid-cols-2 gap-3 text-left">
+                  <div className="mt-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 md:mt-10">
                     {starters.slice(0, 6).map((q, i) => (
                       <button
                         key={q}
@@ -367,7 +380,7 @@ export default function ChatPage() {
           </div>
 
           {/* Composer */}
-          <div className="px-8 pb-6 pt-2">
+          <div className="px-3 pb-3 pt-2 md:px-8 md:pb-6">
             <div className="mx-auto max-w-4xl">
               <div className="card flex items-end gap-3 p-3 focus-within:border-indigo-300">
                 <textarea
@@ -385,7 +398,7 @@ export default function ChatPage() {
                       send();
                     }
                   }}
-                  placeholder="Ask about professors, labs, projects or openings…"
+                  placeholder="Ask about professors, labs, openings…"
                   className="block max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] text-slate-800 outline-none placeholder:text-slate-400"
                 />
                 {sending ? (
