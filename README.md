@@ -4,13 +4,20 @@ A research assistant for students of the ECE Department, IIT Roorkee. It answers
 questions using the department website, which it scrapes on a schedule, and
 personalises everything to the student's research interests.
 
+**Live:** <https://queryece.indiasouthcentral.cloudapp.azure.com> (Azure, Docker + Caddy; see [DEPLOY.md](DEPLOY.md))
+
 **Features**
 
 - **Home dashboard:** professors matched to your interests (with the reason for each match), personalised starter questions, your outreach pipeline and openings.
 - **Ask QueryECE:** chat with cited sources, separate chat histories, a "For you" next step and suggested follow-up questions.
 - **Professors:** all faculty with photos, ranked by match, plus details and sponsored projects for each.
 - **Outreach:** AI-drafted emails to professors built only from verified data, plus a status tracker with follow-up reminders.
-- **Accounts:** email + password with a 6-digit email verification code at sign-up.
+- **Insights from seniors:** student-written tips that aren't on any website (professors, BTP, courses, interviews), with helpful votes and moderation; the assistant quotes them under a separate "From seniors (unofficial)" heading.
+- **What's new:** each crawl is compared with the last; new openings, sponsored projects and changed pages appear in a feed, marked "For you" when they match your interests, plus an optional daily email digest.
+- **Profile:** research interests and a CV (PDF) that personalise answers and email drafts; email alerts switch.
+- **Accounts:** email + password with a 6-digit verification code at sign-up, and password reset by emailed code.
+
+Design: Apple-style UI (frosted top bar, Apple blue accent, SF/Inter type).
 
 ## Architecture
 
@@ -65,8 +72,9 @@ backend/app/
   ingest/              crawler, html→text, structured extractors, pipeline
   rag/                 chunker, embeddings, hybrid index, personal (interest matching)
   agent/               Groq client, tools, agent loop + context management
-  routers/             auth (+ OTP), chats, data, discover (home, ranked faculty), outreach
-frontend/app/          /login, / (home), /chat, /professors, /outreach, /profile
+  routers/             auth (+ OTP, reset, CV), chats, data, discover, outreach, insights, updates
+  reminders.py         follow-up reminders and daily what's-new digest emails
+frontend/app/          /login, / (home), /chat, /professors, /insights, /updates, /outreach, /profile
 data/                  queryece.db, chroma/, models/  (generated, gitignored)
 ```
 
@@ -93,6 +101,10 @@ keeps the saved copies. To refresh just the photos (on campus Wi-Fi or VPN), run
 SQLite can't be shared between Windows and a container.
 
 With Docker, run `docker compose up --build`. If the database is empty, the backend crawls on first start.
+
+**Production:** `docker compose -f docker-compose.prod.yml up -d --build` runs the backend,
+a pre-built frontend and Caddy (automatic HTTPS, one address for site and API).
+[DEPLOY.md](DEPLOY.md) walks through hosting it on Azure for Students.
 
 To trigger a re-crawl from the API, add your email to `ADMIN_EMAILS` and call `POST /api/admin/crawl`.
 
