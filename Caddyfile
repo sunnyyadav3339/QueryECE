@@ -1,0 +1,17 @@
+# One public address for everything. With a real domain in DOMAIN, Caddy gets
+# and renews a free HTTPS certificate automatically; DOMAIN=:80 serves plain
+# HTTP (for testing on a laptop).
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		# Chat answers stream as server-sent events; flush them immediately.
+		reverse_proxy backend:8000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

@@ -29,7 +29,9 @@ EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", 
 
 def photo_path(faculty_id: int):
     """The saved photo for a faculty member, or None."""
-    for ext in set(EXTENSIONS.values()):
+    # .jpg first: every saved photo is a JPEG thumbnail now, so this is usually one
+    # file check (each check costs ~90 ms on a Docker-on-Windows bind mount).
+    for ext in (".jpg", ".png", ".webp", ".gif"):
         p = PHOTOS_DIR / f"{faculty_id}{ext}"
         if p.exists():
             return p
