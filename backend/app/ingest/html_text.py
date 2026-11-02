@@ -23,6 +23,8 @@ BLOCK_TAGS = {"p", "div", "li", "ul", "ol", "section", "article", "tr", "br",
               "h1", "h2", "h3", "h4", "h5", "h6", "dd", "dt", "blockquote"}
 HEADING_CLASSES = ("section-heading", "section-heading-blue", "sub-heading")
 LINK_WORDS = re.compile(r"^(view|download|click here|here|link|pdf|read more|website)$", re.I)
+# The institute CMS makes document buttons with <div onclick="window.location='...'">.
+ONCLICK_URL = re.compile(r"""(?:location(?:\.href)?\s*=|window\.open\(\s*)\s*['"]([^'"]+)['"]""")
 
 
 # Some IITR pages contain Windows-1252 punctuation (curly quotes, dashes) decoded
@@ -77,6 +79,13 @@ def _walk(node: Tag, out: list[tuple[str, str]], base_url: str):
             out.append(("break", ""))
             out.extend(("line", line) for line in table_to_lines(child))
             continue
+        onclick = ONCLICK_URL.search(child.get("onclick") or "")
+        if onclick:
+            label = clean(child.get_text(" "))
+            out.append(("break", ""))
+            out.append(("text", f"{label} ({onclick.group(1)})" if label else onclick.group(1)))
+            out.append(("break", ""))
+            continue
         if _is_heading(child):
             t = clean(child.get_text(" "))
             if t:
@@ -100,6 +109,26 @@ def page_title(soup: BeautifulSoup) -> str:
     return title or "IIT Roorkee ECE"
 
 
+def _label_tabs(soup: BeautifulSoup):
+    """Turn each tab's label into a heading on its own panel.
+
+    The CMS renders tab labels in one strip and the panels elsewhere. Flattened,
+    "Purchase Committee" ends up far from its member list, so lists would lose
+    what they belong to.
+    """
+    for container in soup.select(".tabs-container"):
+        labels = container.select(".tab")
+        panels = container.select(".contents > .content")
+        if not labels or len(labels) != len(panels):
+            continue
+        for label, panel in zip(labels, panels):
+            heading = soup.new_tag("div", attrs={"class": "sub-heading"})
+            heading.string = clean(label.get_text(" "))
+            panel.insert(0, heading)
+        for label in labels:
+            label.decompose()
+
+
 def html_to_text(html: str, url: str = "") -> tuple[str, str, BeautifulSoup]:
     """Return (title, structured_text, soup). The soup is reused by extractors."""
     soup = BeautifulSoup(html, "lxml")
@@ -108,6 +137,7 @@ def html_to_text(html: str, url: str = "") -> tuple[str, str, BeautifulSoup]:
     for selector in CHROME_SELECTORS:
         for el in content.select(selector):
             el.decompose()
+    _label_tabs(content)
     body = content.body or content
 
     tokens: list[tuple[str, str]] = []

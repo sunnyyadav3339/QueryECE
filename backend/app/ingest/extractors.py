@@ -183,3 +183,82 @@ def extract_opportunities(soup: BeautifulSoup, page_url: str) -> list[dict]:
         })
     return records
 
+
+
+# Syllabus PDFs use one institute-wide form per course:
+#   1. Subject Code: ECN-342 Course Title: RF and Mixed Signals Circuits
+#   2. Contact Hours: L: 3 T: 1 P: 0
+#   5. Credits: 4 6. Semester : Spring 7. Subject Area: DCC
+#   8. Pre-requisite: ...  9. Objective: ...  10. Details of the Course: ...
+# OCRed pages vary: "SubjectCode:ECN-357 | CourseTitle:ElectronicSub-Systems", "Subject Code : . EC-343".
+_COURSE_START = re.compile(
+    r"Subject\s*Code\s*:?[\s.|]*([A-Z]{2,4})\s*-?\s*(\d{3}[A-Z]?)[\s|]*Course\s*Title\s*:?[\s|]*(.+)", re.I)
+
+
+def _spaced(title: str) -> str:
+    """Put back the spaces OCR drops inside titles ("ElectronicSub-Systems")."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", title)
+
+
+def _field(pattern: str, text: str) -> str | None:
+    m = re.search(pattern, text, re.I | re.S)
+    return clean(m.group(1)) if m and clean(m.group(1)) else None
+
+
+# A teaching-scheme row: "4 ECC-101 Introduction to Programming PCC 4 3 0 2/2 3 0 15-30 ...".
+_STRUCTURE_ROW = re.compile(
+    r"^(?:(Year [^:\n]+|Elective list): )?(?:\d+\.?\s+)?([A-Z]{2,4})\s*-\s*(\d{3}[A-Z]?)\s+(.+?)\s+"
+    r"([A-Z]{2,5}(?:/[A-Z]{2,5})?)\s+(\d{1,2})\b(?:\s+(\d+)\s+(\d+)\s+(\d+(?:/\d+)?)\b)?",
+    re.M,
+)
+
+
+def _structure_rows(text: str, url: str, title: str) -> list[dict]:
+    """Courses listed only in a course-structure table, so they have no syllabus contents."""
+    rows = []
+    for m in _STRUCTURE_ROW.finditer(text):
+        rows.append({
+            "code": f"{m.group(2)}-{m.group(3)}",
+            "title": _spaced(clean(m.group(4)))[:200],
+            "department": None,
+            "contact_hours": f"L:{m.group(7)} T:{m.group(8)} P:{m.group(9)}" if m.group(7) else None,
+            "credits": m.group(6),
+            "semester": m.group(1),
+            "subject_area": m.group(5),
+            "prerequisite": None,
+            "objective": None,
+            "contents": "",
+            "source_url": url,
+            "source_title": title,
+        })
+    return rows
+
+
+def extract_courses(text: str, url: str, title: str) -> list[dict]:
+    """One record per course form in a syllabus PDF, plus any course-structure table rows."""
+    text = text.replace(" | ", " ")  # OCR marks column gaps; the field patterns don't expect them
+    starts = list(_COURSE_START.finditer(text))
+    courses = []
+    for i, m in enumerate(starts):
+        block = text[m.end():starts[i + 1].start() if i + 1 < len(starts) else len(text)]
+        before = text[max(0, m.start() - 200):m.start()]
+        dept = re.findall(r"NAME OF DEPT\.?/?\s*CENTRE\s*:\s*(.+)", before, re.I)
+        details = re.search(r"Details of the Course\s*:?(.*)", block, re.I | re.S)
+        body = details.group(1) if details else block
+        # The next course's institute header isn't part of this one.
+        body = re.split(r"INDIAN INSTITUTE OF TECHNOLOGY ROORKEE", body)[0].strip()
+        courses.append({
+            "code": f"{m.group(1).upper()}-{m.group(2).upper()}",
+            "title": _spaced(clean(m.group(3)))[:200],
+            "department": clean(dept[-1])[:120] if dept else None,
+            "contact_hours": _field(r"Contact Hours\s*:\s*(L\s*:\s*\d+\s*T\s*:\s*\d+\s*P\s*:\s*\d+)", block),
+            "credits": _field(r"Credits\s*:\s*(\d+)", block),
+            "semester": _field(r"Semester\s*:?\s*([A-Za-z/ ,]+?)\s*(?:\d+\.|$|\n)", block),
+            "subject_area": _field(r"Subject Area\s*:\s*([A-Za-z/ ]+)", block),
+            "prerequisite": _field(r"Pre-?\s*requisite\s*:\s*(.+?)\s*(?:\d+\.\s*Objective|\n\d+\.)", block),
+            "objective": _field(r"Objective\s*(?:of the Course|of Course)?\s*:\s*(.+?)\s*(?:\d+\.\s*Details|$)", block),
+            "contents": body[:6000],
+            "source_url": url,
+            "source_title": title,
+        })
+    return courses + _structure_rows(text, url, title)

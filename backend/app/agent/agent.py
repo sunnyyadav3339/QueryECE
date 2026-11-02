@@ -31,9 +31,9 @@ from app.rag import personal
 
 log = logging.getLogger(__name__)
 
-HISTORY_TOKEN_BUDGET = 1500
+HISTORY_TOKEN_BUDGET = 1000
 PROMPT_TOKEN_CEILING = 6000  # beyond this, force a final answer without more tools
-MAX_TOOL_ROUNDS = 3
+MAX_TOOL_ROUNDS = 1  # one round of (possibly several) tool calls, then answer: Groq's free tier allows 8K tokens/minute
 KEEP_RECENT = 6  # messages always kept verbatim (never summarised away)
 SUMMARY_TRIGGER_TOKENS = 1200
 CITATION_RE = re.compile(r"【(\d+)[^】]*】")
@@ -43,7 +43,12 @@ SYSTEM_PROMPT = """You are QueryECE, the research and information assistant for 
 Grounding rules (most important):
 - State only facts that appear in tool results from this turn or earlier in this conversation. The data is scraped from the official iitr.ac.in ECE website and refreshed weekly.
 - Never fill gaps from general knowledge: no invented paper titles, project names, grants, years, emails, phone numbers, deadlines or "typical" examples. If a tool result only gives a link (e.g. "complete list of publications available at <url>"), say that and share the link instead of listing items.
-- If the tools don't contain the answer, say so plainly and suggest where to check (the faculty member, the department office, or the linked page).
+- Only give links that appear in tool results, exactly as written; never construct a URL.
+- If the tools don't contain the answer, say you couldn't find it in what you searched, never that the data or website has none, and suggest where to check (the faculty member, the department office, or the linked page).
+- Never add a course title, a meaning for an abbreviation (DCC, PEC...), or a description of your own: only what a tool result shows. Course codes are named at the end of tool results as "Official titles"; if a code has no title there, give the code alone. In time tables, L, T and P before a code mean lecture, tutorial and practical.
+- Who holds a post (Head, DAPC/DRC chair, faculty in-charge, committee members): name only who the result shows under that exact committee or post heading. Members of one committee are not members of another.
+- Calendars, fee structures and regulations exist for several years and programmes: use the latest one that applies (today's date is above), and say which year or batch it is for.
+- A source marked "[scanned copy]" was read by OCR, so spellings and room numbers can be off: give what it says, say it comes from a scanned copy, and link the PDF so the student can confirm.
 - Copy dates, times, names and numbers exactly as written in the tool result; never shift or infer them. If a detail isn't shown, say "see the linked document". Point out when a date is already past (compare with today's date).
 - Put a citation like [2] after every factual sentence or table row, using the numbers from tool results.
 
@@ -51,6 +56,8 @@ How to use tools:
 - find_faculty: a person by name, or faculty matching a research topic.
 - list_sponsored_projects: funded projects/grants by PI, keyword, agency or year.
 - list_opportunities: open RA / JRF / project-staff / post-doc adverts.
+- find_time_table: which class is on which weekday, slot or room, or what a teacher teaches now (pass teacher). Always use it for these (but search_department_info for dates like when classes start), with the programme and year the student states or their profile shows. Each row belongs only to that programme and year, so never answer from another one's rows. If the term isn't the one published, or rows carry batches like 24EC2, say so.
+- find_course: a course's credits, L-T-P, semester, pre-requisites and syllabus contents, by code or title. Always use it, not search_department_info, to list a term's courses (query like "B.Tech Year I Autumn"), and list exactly what it returns.
 - search_senior_insights: tips from IITR seniors that aren't on any website (what a professor looks for, how they reply, BTP/course/interview experiences). Call it, in addition to the official tools, for advice, "what is it like" or "how do I approach" questions. Present what it returns under a separate heading "**From seniors (unofficial)**", citing each tip, and never state it as an official fact or mix it into official details.
 - search_department_info: everything else (programmes, admissions, courses, labs, research groups, contacts, faculty publications/students/patents/awards, news).
 - Usually one tool call is enough; make another only if the first result is insufficient. Write self-contained queries (resolve "he", "the second one" from the conversation).
@@ -116,6 +123,19 @@ def build_context(db: Session, chat: Chat, user: User) -> list[dict]:
     return messages
 
 
+def _without_tool_calls(messages: list[dict]) -> list[dict]:
+    """The conversation with tool results as plain context, for the round that must answer.
+
+    gpt-oss can still try to call a tool when it sees earlier tool calls, which Groq rejects.
+    """
+    plain = [m for m in messages if m["role"] != "tool" and not m.get("tool_calls")]
+    results = [m["content"] for m in messages if m["role"] == "tool"]
+    if results:
+        plain.append({"role": "system", "content": "Tool results:\n" + "\n\n".join(results)})
+    plain.append({"role": "system", "content": "No more tools are available. Answer now, using only the results above; say what they don't cover."})
+    return plain
+
+
 async def _run_tool(call: llm.ToolCall, reg: tools.SourceRegistry) -> str:
     fn = tools.REGISTRY.get(call.name)
     if fn is None:
@@ -155,19 +175,26 @@ async def respond(chat_id: str, user_id: int, text: str) -> AsyncIterator[dict]:
     async def on_token(delta: str):
         await queue.put({"type": "token", "text": delta})
 
+    async def on_wait(seconds: int):
+        await queue.put({"type": "status", "text": f"Free model limit reached, continuing in about {seconds} seconds"})
+
     reg = tools.SourceRegistry()
     answer = ""
+    failed = False
 
     async def agent_loop():
-        nonlocal answer
+        nonlocal answer, failed
         try:
             for round_no in range(MAX_TOOL_ROUNDS + 1):
                 over_budget = llm.estimate_tokens(messages) > PROMPT_TOKEN_CEILING
                 allow_tools = round_no < MAX_TOOL_ROUNDS and not over_budget
                 try:
+                    # Choosing a tool is the easy part: spend the main model's small
+                    # per-minute quota on writing the answer.
                     result = await llm.stream_round(
-                        messages, tools=tools.TOOL_SCHEMAS,
-                        tool_choice="auto" if allow_tools else "none", on_token=on_token,
+                        messages if allow_tools else _without_tool_calls(messages),
+                        tools=tools.TOOL_SCHEMAS if allow_tools else None, on_token=on_token, on_wait=on_wait,
+                        model=llm.GROQ_FAST_MODEL if round_no == 0 else llm.GROQ_MODEL,
                     )
                 except groq.APIError as exc:
                     # gpt-oss occasionally emits malformed tool calls, which Groq
@@ -176,8 +203,8 @@ async def respond(chat_id: str, user_id: int, text: str) -> AsyncIterator[dict]:
                     log.warning("tool round failed (%s); falling back to plain RAG", exc)
                     await queue.put({"type": "status", "text": tools.STATUS_TEXT["search_department_info"]})
                     context = await asyncio.to_thread(tools.search_department_info, reg, text)
-                    fallback = messages + [{"role": "system", "content": f"Search results:\n{context}"}]
-                    result = await llm.stream_round(fallback, on_token=on_token)
+                    fallback = _without_tool_calls(messages + [{"role": "tool", "content": context}])
+                    result = await llm.stream_round(fallback, on_token=on_token, on_wait=on_wait)
                 answer += result.content
                 if not result.tool_calls:
                     break
@@ -192,26 +219,39 @@ async def respond(chat_id: str, user_id: int, text: str) -> AsyncIterator[dict]:
                     output = await _run_tool(call, reg)
                     messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
         except llm.LLMUnavailable as exc:
+            failed = True
             await queue.put({"type": "error", "text": str(exc)})
         except Exception as exc:  # surface, don't hang the stream
+            failed = True
             log.exception("agent failed")
-            await queue.put({"type": "error", "text": f"Something went wrong: {exc.__class__.__name__}"})
+            await queue.put({"type": "error", "text": "Something went wrong while answering that. Please try again or rephrase it."})
         finally:
             await queue.put(None)
 
+    def drop_question():
+        # So it doesn't linger in the history and get answered in place of the next question.
+        with SessionLocal() as db:
+            db.query(Message).filter_by(id=user_msg_id).delete()
+            db.commit()
+
     task = asyncio.create_task(agent_loop())
-    while (event := await queue.get()) is not None:
-        yield event
-    await task
+    finished = False
+    try:
+        while (event := await queue.get()) is not None:
+            yield event
+        await task
+        finished = True
+    finally:
+        if not finished:  # the student pressed Stop or left
+            task.cancel()
+            drop_question()
 
     # gpt-oss sometimes cites as 【1】 or 【1†source】; store the plain [1] form.
     answer = CITATION_RE.sub(lambda m: f"[{m.group(1)}]", answer).strip()
     if not answer:
-        # Failed turn: drop the unanswered question so it doesn't linger in
-        # the history and get answered in place of the next question.
-        with SessionLocal() as db:
-            db.query(Message).filter_by(id=user_msg_id).delete()
-            db.commit()
+        drop_question()
+        if not failed:
+            yield {"type": "error", "text": "I couldn't put an answer together. Please ask again."}
         return
     # Cited sources first, then the rest of what was retrieved (capped).
     cited = [s for s in reg.sources if f"[{s['n']}]" in answer]

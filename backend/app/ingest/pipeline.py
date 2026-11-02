@@ -8,15 +8,21 @@ Run manually:  python -m app.ingest.pipeline
 
 import hashlib
 import logging
+import re
 import threading
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
+
+import httpx
 
 from app.db.database import SessionLocal, init_db
-from app.db.models import Chunk, CrawlRun, Faculty, Opportunity, Page, Project, Startup, Update
+from app.db.models import Chunk, Course, CrawlRun, Faculty, Opportunity, Page, Project, Startup, Update
 from app.ingest.photos import sync_photos
 from app.ingest import extractors
-from app.ingest.crawler import FetchedPage, crawl, fetch_bytes, page_category
-from app.ingest.html_text import pdf_to_text
+from app.ingest.crawler import (
+    HOST, RESUME_HOST, USER_AGENT, FetchedPage, crawl, fetch_bytes, in_ece_scope, page_category,
+)
+from app.ingest.html_text import html_to_text, pdf_to_text
 from app.rag import index
 from app.rag.chunker import chunk_page
 
@@ -52,11 +58,12 @@ def _store_page(db, fetched: FetchedPage, category: str | None = None, record: b
     if page is None:
         page = Page(url=fetched.url)
         db.add(page)
+    retitled = page.title != fetched.title  # titles are part of every indexed chunk
     page.title = fetched.title
     page.category = category or page_category(fetched.url)
     page.fetched_at = _now()
     was_active, page.active = page.active, True
-    changed = page.content_hash != digest or was_active is False
+    changed = page.content_hash != digest or was_active is False or retitled
     if not changed:
         return page, False
 
@@ -97,6 +104,51 @@ def _refresh_faculty(db, records):
 
 def _resolver(db):
     return extractors.FacultyResolver([(f.id, f.name) for f in db.query(Faculty).all()])
+
+
+def _refresh_courses(db, records):
+    """Replace the course table. The same code can appear in several PDFs: keep the fullest form."""
+    if not records:
+        return
+    best: dict[str, dict] = {}
+    for rec in records:
+        current = best.get(rec["code"])
+        if current is None or len(rec["contents"] or "") > len(current["contents"] or ""):
+            best[rec["code"]] = rec
+    db.query(Course).delete()
+    db.add_all(Course(**rec) for rec in best.values())
+
+
+def _store_faculty_sites(db, seen_urls: set[str]) -> int:
+    """Personal pages listed in faculty profiles, where publication lists usually live.
+
+    Only the page itself is read, and failures are fine: many are unreachable from
+    outside the campus or simply out of date.
+    """
+    stored = 0
+    db.flush()
+    for fac in db.query(Faculty).all():
+        profile = db.query(Page).filter_by(url=fac.profile_url).first() if fac.profile_url else None
+        found = re.search(r"https?://\S+", (profile.text or "")[:500]) if profile else None
+        url = found.group(0).rstrip(").,") if found else ""
+        if not url or RESUME_HOST in url or url in seen_urls or in_ece_scope(url):
+            continue
+        fac.website = url
+        try:
+            resp = httpx.get(url, headers={"User-Agent": USER_AGENT}, timeout=15, follow_redirects=True)
+            if resp.status_code >= 400 or "html" not in resp.headers.get("content-type", ""):
+                continue
+            _title, text, _soup = html_to_text(resp.text, url)
+        except (httpx.HTTPError, ValueError) as exc:
+            log.info("faculty site unavailable %s: %s", url, exc)
+            continue
+        if len(text) < 200:
+            continue
+        seen_urls.add(url)
+        _store_page(db, FetchedPage(url=url, title=f"Personal page: Prof. {fac.name}", text=text),
+                    category="faculty_profile")
+        stored += 1
+    return stored
 
 
 def _refresh_projects(db, records, record: bool = False):
@@ -156,7 +208,9 @@ def _refresh_opportunities(db, records, record: bool = False):
             opp.active = False
 
 
-def run_pipeline(max_pages: int | None = None) -> dict:
+def run_pipeline(max_pages: int | None = None, feed: bool = True) -> dict:
+    """Crawl and re-index. feed=False skips the What's new log (for a crawl that changes
+    how pages are read, where everything would otherwise look "updated")."""
     if not _run_lock.acquire(blocking=False):
         return {"status": "already_running"}
     init_db()
@@ -167,14 +221,16 @@ def run_pipeline(max_pages: int | None = None) -> dict:
     try:
         seen_urls: set[str] = set()
         # The first crawl would log every page as "new"; only record changes after that.
-        record = db.query(CrawlRun).filter_by(status="ok").count() > 0
-        structured = {"faculty": [], "projects": [], "startups": [], "opportunities": []}
+        record = feed and db.query(CrawlRun).filter_by(status="ok").count() > 0
+        structured = {"faculty": [], "projects": [], "startups": [], "opportunities": [], "courses": []}
         kwargs = {"max_pages": max_pages} if max_pages else {}
         for fetched in crawl(**kwargs):
             seen_urls.add(fetched.url)
             _page, changed = _store_page(db, fetched, record=record)
             run.pages_fetched += 1
             run.pages_changed += int(changed)
+            if fetched.is_pdf and re.search(r"Subject\s*Code|Course\s*Title", fetched.text):
+                structured["courses"] += extractors.extract_courses(fetched.text, fetched.url, fetched.title)
             if fetched.soup is not None:
                 if fetched.url.endswith(FACULTY_DIR):
                     structured["faculty"] = extractors.extract_faculty_directory(fetched.soup, fetched.url)
@@ -198,13 +254,18 @@ def run_pipeline(max_pages: int | None = None) -> dict:
         _refresh_projects(db, structured["projects"], record)
         _refresh_startups(db, structured["startups"])
         _refresh_opportunities(db, structured["opportunities"], record)
+        _refresh_courses(db, structured["courses"])
+        db.flush()
+        faculty_sites = _store_faculty_sites(db, seen_urls)
 
         # Retire pages that disappeared from the site. Skip on a suspiciously
         # small crawl (site outage) so a bad run can't wipe the index.
         if run.pages_fetched >= 20 and not max_pages:
             opp_urls = {o.url for o in db.query(Opportunity.url).filter(Opportunity.active.is_(True))}
             for page in db.query(Page).filter(Page.active.is_(True)).all():
-                if page.url not in seen_urls and page.url not in opp_urls:
+                # Only retire our own site's pages: channeli and personal sites are
+                # often unreachable from here, which doesn't mean they're gone.
+                if page.url not in seen_urls and page.url not in opp_urls and urlsplit(page.url).netloc == HOST:
                     page.active = False
                     index.delete_page_chunks(db, page.id)
                     db.query(Chunk).filter_by(page_id=page.id).delete()
@@ -218,7 +279,7 @@ def run_pipeline(max_pages: int | None = None) -> dict:
             "pages_removed": run.pages_removed, "faculty": len(structured["faculty"]),
             "projects": len(structured["projects"]), "startups": len(structured["startups"]),
             "opportunities": len(structured["opportunities"]), "chunks_indexed": index.count(),
-            "photos": photos,
+            "photos": photos, "courses": db.query(Course).count(), "faculty_sites": faculty_sites,
         }
         log.info("pipeline finished: %s", summary)
         return summary
@@ -245,5 +306,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-pages", type=int, default=None, help="limit for a quick test crawl")
+    parser.add_argument("--no-feed", action="store_true", help="don't log this crawl's changes to What's new")
     args = parser.parse_args()
-    print(json.dumps(run_pipeline(args.max_pages), indent=2))
+    print(json.dumps(run_pipeline(args.max_pages, feed=not args.no_feed), indent=2))

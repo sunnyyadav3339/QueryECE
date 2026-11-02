@@ -181,6 +181,8 @@ export default function ChatPage() {
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
         updateLast((m) => ({ ...m, error: "Connection lost. Please try again.", streaming: false }));
+      } else {
+        updateLast((m) => (m.content ? m : { ...m, error: "Stopped." }));
       }
     } finally {
       updateLast((m) => ({ ...m, streaming: false, status: undefined }));

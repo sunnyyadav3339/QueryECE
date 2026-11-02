@@ -244,6 +244,25 @@ class Project(Base):
     faculty = relationship("Faculty")
 
 
+class Course(Base):
+    """A course parsed from the department's syllabus PDFs (exact-answer tool)."""
+
+    __tablename__ = "courses"
+
+    code = Column(String, primary_key=True)  # normalised, e.g. "ECN-342"
+    title = Column(String, nullable=False)
+    department = Column(String)
+    contact_hours = Column(String)  # "L: 3 T: 1 P: 0"
+    credits = Column(String)
+    semester = Column(String)
+    subject_area = Column(String)
+    prerequisite = Column(String)
+    objective = Column(Text)
+    contents = Column(Text)  # the syllabus topics (and books when present)
+    source_url = Column(String)
+    source_title = Column(String)
+
+
 class Startup(Base):
     __tablename__ = "startups"
 
