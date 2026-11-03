@@ -332,6 +332,10 @@ def find_course(reg: SourceRegistry, query: str, **_ignored) -> str:
 
 
 STARTUP_QUERY = re.compile(r"\b(start-?\s?ups?|spin-?\s?offs?|incubat\w*)\b", re.I)
+# "list all labs", "which professors have...", "names of the committee members", "how many..."
+LIST_QUERY = re.compile(r"\b(?:list|all|every|names\s+of|how\s+many)\b|\bwhich\s+\w{2,}[^\Ws]s\b", re.I)
+LIST_HITS = 12
+LIST_HIT_CHARS = 480
 
 
 def _startup_blocks(reg: SourceRegistry) -> list[str]:
@@ -353,12 +357,22 @@ def search_department_info(reg: SourceRegistry, query: str, **_ignored) -> str:
     # No section filter: the model's category guesses (e.g. "research" for a PhD
     # interview PDF) excluded the right pages more often than they helped.
     blocks = _startup_blocks(reg) if STARTUP_QUERY.search(query) else []
-    hits = index.search(_expand_acronyms(query), k=3 if blocks else 5)
+    if LIST_QUERY.search(query) and not blocks:
+        # A list spans many pages: show more of them, less of each, within the same budget.
+        hits, pages = [], set()
+        for hit in index.search(_expand_acronyms(query), k=24):
+            if hit.url not in pages and len(hits) < LIST_HITS:
+                pages.add(hit.url)
+                hits.append(hit)
+        cut = LIST_HIT_CHARS
+    else:
+        hits = index.search(_expand_acronyms(query), k=3 if blocks else 5)
+        cut = 1300  # whole chunk (~1200 chars + header)
     if not hits and not blocks:
         return "This search found nothing on the department website."
     for hit in hits:
         n = reg.ref(hit.title, hit.url)
-        blocks.append(f"[{n}] {hit.text[:1300]}")  # whole chunk (~1200 chars + header)
+        blocks.append(f"[{n}] {hit.text[:cut]}")
     # Kept outside _clip so truncation can't drop it.
     return _with_course_titles(_clip("\n\n".join(blocks))) + (
         "\n\n(These are the few best-matching passages, not a complete list: never present them as all there is.)")
