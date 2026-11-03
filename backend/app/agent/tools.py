@@ -203,6 +203,9 @@ def _expand_acronyms(query: str) -> str:
     extra += [short for short, full in ACRONYMS.items() if full.lower() in query.lower()]
     if "FIC" not in extra and re.search(r"in-?\s?charge", query, re.I):
         extra.append("FIC")
+    # Lab inventories sit under these headings, which "labs in the department" rarely matches.
+    if re.search(r"\blabs?\b|laborator", query, re.I):
+        extra.append("Lab Facilities; Research Groups and Labs")
     return f"{query} ({'; '.join(extra)})" if extra else query
 
 
@@ -336,6 +339,7 @@ STARTUP_QUERY = re.compile(r"\b(start-?\s?ups?|spin-?\s?offs?|incubat\w*)\b", re
 LIST_QUERY = re.compile(r"\b(?:list|all|every|names\s+of|how\s+many)\b|\bwhich\s+\w{2,}[^\Ws]s\b", re.I)
 LIST_HITS = 12
 LIST_HIT_CHARS = 480
+RESUME_EXCERPT_CHARS = 2500  # education and positions; well inside MAX_TOOL_CHARS with the card
 
 
 def _startup_blocks(reg: SourceRegistry) -> list[str]:
@@ -445,6 +449,13 @@ def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: s
                     block += [f"- {p.title} ({p.agency or 'agency n/a'}, {p.year or 'year n/a'})" for p in projects]
                 for s in db.query(Startup).filter_by(faculty_id=f.id).all():
                     block.append(f"Startup: {s.name} — {s.website or ''}")
+                # The agent gets one round of tool calls, so a "background / CV" question
+                # answered here must carry the resume itself, not just a link to it.
+                resume = (db.query(Page).filter_by(url=f.resume_url, active=True).first()
+                          if f.resume_url else None)
+                if resume and resume.text:
+                    rn = reg.ref(f"Resume / CV: {f.name}", f.resume_url)
+                    block.append(f"From their resume / CV [{rn}] (beginning):\n{resume.text[:RESUME_EXCERPT_CHARS]}")
                 block.append("(For publications, students, education or patents, use search_department_info "
                              "with the faculty name.)")
                 out.append("\n".join(block))
