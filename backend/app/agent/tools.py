@@ -78,13 +78,16 @@ TOOL_SCHEMAS = [
             "name": "find_faculty",
             "description": (
                 "Look up ECE faculty. Give `name` for one person's contact details, designation, interests, "
-                "projects and startups; or `research_topic` to rank faculty whose research matches a topic."
+                "resume/CV status, projects and startups; or `research_topic` to rank faculty whose research "
+                "matches a topic; or `with_resume` to list every faculty member with a resume/CV on file; "
+                "or no arguments for the whole directory."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
                     "research_topic": {"type": "string"},
+                    "with_resume": {"type": "boolean", "description": "List exactly the faculty who have a resume/CV."},
                 },
             },
         },
@@ -356,7 +359,9 @@ def search_department_info(reg: SourceRegistry, query: str, **_ignored) -> str:
     for hit in hits:
         n = reg.ref(hit.title, hit.url)
         blocks.append(f"[{n}] {hit.text[:1300]}")  # whole chunk (~1200 chars + header)
-    return _with_course_titles(_clip("\n\n".join(blocks)))
+    # Kept outside _clip so truncation can't drop it.
+    return _with_course_titles(_clip("\n\n".join(blocks))) + (
+        "\n\n(These are the few best-matching passages, not a complete list: never present them as all there is.)")
 
 
 _faculty_vec_cache: dict[str, list[float]] = {}
@@ -383,14 +388,29 @@ def _faculty_card(f: Faculty, reg: SourceRegistry) -> str:
         parts.append(f"Website: {f.website}")
     if f.interests:
         parts.append(f"Research interests: {f.interests}")
+    if f.resume_url:
+        parts.append(f"Resume / CV: available [{reg.ref(f'Resume / CV: {f.name}', f.resume_url)}]")
+    elif f.resume_url == "":
+        parts.append("Resume / CV: none uploaded on the department profile")
     return "\n".join(parts)
 
 
-def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: str | None = None) -> str:
+def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: str | None = None,
+                 with_resume: bool = False, **_ignored) -> str:
     with SessionLocal() as db:
         faculty = db.query(Faculty).all()
         if not faculty:
             return "Faculty directory is empty (the website has not been indexed yet)."
+
+        if with_resume and not name and not research_topic:
+            have = sorted((f for f in faculty if f.resume_url), key=lambda f: f.name)
+            if not have and all(f.resume_url is None for f in faculty):
+                return "Which faculty have a resume isn't known yet (profiles not indexed since this was added)."
+            lines = [f"Complete list: {len(have)} of {len(faculty)} ECE faculty have a resume / CV on their "
+                     "department profile (the rest have none uploaded):"]
+            lines += [f"- {f.name} — {f.designation or ''} "
+                      f"[{reg.ref(f'Resume / CV: {f.name}', f.resume_url)}]" for f in have]
+            return _clip("\n".join(lines))
 
         if name:
             resolver = FacultyResolver([(f.id, f.name) for f in faculty])
@@ -434,7 +454,8 @@ def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: s
 
         n = reg.ref("ECE Faculty Members", FACULTY_DIRECTORY_URL)
         lines = [f"[{n}] ECE faculty ({len(faculty)}):"]
-        lines += [f"- {f.name} — {f.designation or ''} — {f.email or ''}" for f in sorted(faculty, key=lambda f: f.name)]
+        lines += [f"- {f.name} — {f.designation or ''} — {f.email or ''}" + (" — has resume/CV" if f.resume_url else "")
+                  for f in sorted(faculty, key=lambda f: f.name)]
         return _clip("\n".join(lines))
 
 

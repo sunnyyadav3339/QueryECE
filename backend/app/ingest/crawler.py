@@ -21,7 +21,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import CRAWL_DELAY_SECONDS, CRAWL_MAX_PAGES
-from app.ingest.html_text import ONCLICK_URL, clean, html_to_text
+from app.ingest.html_text import ONCLICK_URL, clean, docx_to_text, html_to_text
 from app.ingest.ocr import extract_pdf
 
 log = logging.getLogger(__name__)
@@ -95,6 +95,11 @@ def in_ece_scope(url: str) -> bool:
 
 def is_pdf(url: str) -> bool:
     return urlsplit(url).path.lower().endswith(".pdf")
+
+
+def is_docx_resume(url: str) -> bool:
+    parts = urlsplit(url)
+    return parts.netloc == RESUME_HOST and parts.path.lower().endswith(".docx")
 
 
 def is_html(url: str) -> bool:
@@ -226,6 +231,16 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
             fetched += 1
             ctype = resp.headers.get("content-type", "")
 
+            if is_docx_resume(url):  # a few faculty upload their resume as Word
+                try:
+                    text = docx_to_text(resp.content)
+                except Exception as exc:
+                    log.warning("docx parse failed %s: %s", url, exc)
+                    continue
+                if text.strip():
+                    yield FetchedPage(url=url, title=pdf_titles.get(url, url), text=text, is_pdf=True)
+                continue
+
             if "pdf" in ctype or is_pdf(url):
                 if len(resp.content) > MAX_PDF_BYTES:
                     log.warning("skipping oversized pdf (%d MB): %s", len(resp.content) >> 20, url)
@@ -257,7 +272,7 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
                 if in_ece and host == HOST and in_ece_scope(link) and is_html(link):
                     seen.add(link)
                     queue.append(link)
-                elif not is_pdf(link):
+                elif not (is_pdf(link) or is_docx_resume(link)):
                     continue
                 elif APPLICANT_LIST.search(f"{label} {unquote(urlsplit(link).path)}"):
                     continue

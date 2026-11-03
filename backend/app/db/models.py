@@ -228,6 +228,9 @@ class Faculty(Base):
     interests = Column(Text)
     profile_url = Column(String)
     image_url = Column(String)
+    # From the profile's "Download Resume" button: a PDF URL, "" when none was
+    # uploaded (the button then points at the channeli home page), NULL if unknown.
+    resume_url = Column(String)
 
 
 class Project(Base):

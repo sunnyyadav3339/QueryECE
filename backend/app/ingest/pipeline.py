@@ -23,6 +23,7 @@ from app.ingest.crawler import (
     HOST, RESUME_HOST, USER_AGENT, FetchedPage, crawl, fetch_bytes, in_ece_scope, page_category,
 )
 from app.ingest.html_text import html_to_text, pdf_to_text
+from app.ingest.privacy import redact_applicant_lists
 from app.rag import index
 from app.rag.chunker import chunk_page
 
@@ -52,6 +53,8 @@ def _store_page(db, fetched: FetchedPage, category: str | None = None, record: b
 
     With record=True, a new or changed page is also logged to the "What's new" feed.
     """
+    # Every page passes through here, so this is where named applicant lists are cut.
+    fetched.text = redact_applicant_lists(fetched.text)
     digest = hashlib.sha256(fetched.text.encode()).hexdigest()
     page = db.query(Page).filter_by(url=fetched.url).first()
     is_new = page is None
@@ -129,9 +132,10 @@ def _store_faculty_sites(db, seen_urls: set[str]) -> int:
     db.flush()
     for fac in db.query(Faculty).all():
         profile = db.query(Page).filter_by(url=fac.profile_url).first() if fac.profile_url else None
-        found = re.search(r"https?://\S+", (profile.text or "")[:500]) if profile else None
-        url = found.group(0).rstrip(").,") if found else ""
-        if not url or RESUME_HOST in url or url in seen_urls or in_ece_scope(url):
+        # The resume link comes first on profiles that have one; the website follows it.
+        urls = [u.rstrip(").,") for u in re.findall(r"https?://\S+", (profile.text or "")[:600])] if profile else []
+        url = next((u for u in urls if RESUME_HOST not in u), "")
+        if not url or url in seen_urls or in_ece_scope(url):
             continue
         fac.website = url
         try:
@@ -223,6 +227,7 @@ def run_pipeline(max_pages: int | None = None, feed: bool = True) -> dict:
         # The first crawl would log every page as "new"; only record changes after that.
         record = feed and db.query(CrawlRun).filter_by(status="ok").count() > 0
         structured = {"faculty": [], "projects": [], "startups": [], "opportunities": [], "courses": []}
+        resumes: dict[int, str] = {}  # faculty id -> resume URL, "" when the profile has none
         kwargs = {"max_pages": max_pages} if max_pages else {}
         for fetched in crawl(**kwargs):
             seen_urls.add(fetched.url)
@@ -240,11 +245,19 @@ def run_pipeline(max_pages: int | None = None, feed: bool = True) -> dict:
                     structured["startups"] = extractors.extract_startups(fetched.soup)
                 elif CAREERS in fetched.url:
                     structured["opportunities"] += extractors.extract_opportunities(fetched.soup, fetched.url)
+                elif page_category(fetched.url) == "faculty_profile":
+                    found = extractors.extract_profile_resume(fetched.soup, fetched.url)
+                    if found is not None:
+                        resumes[found[0]] = found[1]
             if run.pages_fetched % 25 == 0:
                 db.commit()
                 log.info("crawl progress: %s fetched, %s changed", run.pages_fetched, run.pages_changed)
 
         _refresh_faculty(db, structured["faculty"])
+        # Only profiles fetched in this run are updated, so one failed fetch can't erase a resume.
+        for fid, resume_url in resumes.items():
+            if (fac := db.get(Faculty, fid)) is not None:
+                fac.resume_url = resume_url
         db.flush()
         try:
             photos = sync_photos(db.query(Faculty).all())

@@ -12,7 +12,7 @@ from urllib.parse import unquote, urljoin
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz, process
 
-from app.ingest.html_text import clean
+from app.ingest.html_text import RESUME_LABEL, clean, is_resume_file
 
 EMAIL_RE = re.compile(r"[\w.+-]+\s*(?:\[at\]|@)\s*[\w-]+(?:\.[\w-]+)+", re.I)
 PHONE_RE = re.compile(r"\+?\d[\d\s-]{7,}\d")
@@ -98,6 +98,18 @@ def extract_faculty_directory(soup: BeautifulSoup, page_url: str) -> list[dict]:
                 record["phone"] = text
         records.append(record)
     return records
+
+
+def extract_profile_resume(soup: BeautifulSoup, page_url: str) -> tuple[int, str] | None:
+    """(faculty id, resume PDF URL or "") from a profile page, or None if it has no resume button."""
+    match = PROFILE_ID_RE.search(unquote(page_url))
+    if not match:
+        return None
+    for a in soup.find_all("a", href=True):
+        if RESUME_LABEL.match(clean(a.get_text(" "))):
+            href = urljoin(page_url, a["href"].strip())
+            return int(match.group(1)), href if is_resume_file(href) else ""
+    return None
 
 
 def extract_projects(soup: BeautifulSoup) -> list[dict]:
