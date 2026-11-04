@@ -22,6 +22,7 @@ from app.ingest import extractors
 from app.ingest.crawler import (
     HOST, RESUME_HOST, USER_AGENT, FetchedPage, crawl, fetch_bytes, in_ece_scope, page_category,
 )
+from app.ingest.course_structure import ACAD_HOST, CATEGORY as STRUCTURE_CATEGORY, COURSE_STRUCTURES_PAGE
 from app.ingest.html_text import html_to_text, pdf_to_text
 from app.ingest.privacy import redact_applicant_lists
 from app.rag import index
@@ -82,6 +83,10 @@ def _store_page(db, fetched: FetchedPage, category: str | None = None, record: b
 
     index.delete_page_chunks(db, page.id)
     db.query(Chunk).filter_by(page_id=page.id).delete()
+    if page.category == STRUCTURE_CATEGORY:
+        # Other departments' structures would crowd ECE's pages out of search;
+        # find_course_structure reads page.text directly.
+        return page, True
     rows = []
     for i, ch in enumerate(chunk_page(page.title, page.text)):
         cid = f"{page.id}:{i}"
@@ -234,7 +239,9 @@ def run_pipeline(max_pages: int | None = None, feed: bool = True) -> dict:
             _page, changed = _store_page(db, fetched, record=record)
             run.pages_fetched += 1
             run.pages_changed += int(changed)
-            if fetched.is_pdf and re.search(r"Subject\s*Code|Course\s*Title", fetched.text):
+            # Not other programmes' structures: their rows would mix into ECE's term listings.
+            if (fetched.is_pdf and page_category(fetched.url) != STRUCTURE_CATEGORY
+                    and re.search(r"Subject\s*Code|Course\s*Title", fetched.text)):
                 structured["courses"] += extractors.extract_courses(fetched.text, fetched.url, fetched.title)
             if fetched.soup is not None:
                 if fetched.url.endswith(FACULTY_DIR):
@@ -278,7 +285,10 @@ def run_pipeline(max_pages: int | None = None, feed: bool = True) -> dict:
             for page in db.query(Page).filter(Page.active.is_(True)).all():
                 # Only retire our own site's pages: channeli and personal sites are
                 # often unreachable from here, which doesn't mean they're gone.
-                if page.url not in seen_urls and page.url not in opp_urls and urlsplit(page.url).netloc == HOST:
+                host = urlsplit(page.url).netloc
+                # Course structures are retired only when their index page was read this run.
+                ours = host == HOST or (host == ACAD_HOST and COURSE_STRUCTURES_PAGE in seen_urls)
+                if page.url not in seen_urls and page.url not in opp_urls and ours:
                     page.active = False
                     index.delete_page_chunks(db, page.id)
                     db.query(Chunk).filter_by(page_id=page.id).delete()

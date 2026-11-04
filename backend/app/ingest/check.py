@@ -67,6 +67,16 @@ def main() -> int:
     search = tools.search_department_info(tools.SourceRegistry(), "PhD admission")
     check("not a complete list" in search, "search results are marked as partial")
 
+    with SessionLocal() as db:
+        structures = db.query(Page).filter(Page.category == "course_structure", Page.active.is_(True)).count()
+    check(structures >= 15, "UG course structures stored", f"{structures} programmes")
+    reg = tools.SourceRegistry()
+    minors = tools.find_course_structure(reg, programme="ECE", list_type="minor")
+    rows = re.findall(r"^- [A-Z]{2,4}-\d{3}", minors, re.M)
+    check(len(rows) >= 5, "ECE minor courses listed", f"{len(rows)} courses")
+    every = tools.find_course_structure(reg, list_type="minor")
+    check(every.count("\n[") >= 10, "minor courses of other departments listed", f"{every.count(chr(10) + '[')} departments")
+
     for ok, line in results:
         print(("PASS " if ok else "FAIL ") + line)
     failed = sum(not ok for ok, _ in results)

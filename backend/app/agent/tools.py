@@ -3,12 +3,14 @@ registers the pages it used so answers can cite them as [n]."""
 
 import hashlib
 import re
+from urllib.parse import unquote
 
 from sqlalchemy import func, or_
 
 from app.db.database import SessionLocal
 from app.config import APP_URL
 from app.db.models import Course, Faculty, Insight, InsightVote, Opportunity, Page, Project, Startup
+from app.ingest import course_structure as cstruct
 from app.ingest.extractors import FacultyResolver, name_key
 from app.rag import index
 from app.rag.embeddings import cosine, embed_passages, embed_query
@@ -156,6 +158,26 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {"query": {"type": "string", "description": "Course code or words from the title or contents."}},
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_course_structure",
+            "description": (
+                "Official UG course structures (2023-24 onwards) of every IITR programme: the lists of Programme "
+                "Electives (PEC), Minor Specialization courses (what students of other branches take for a minor in "
+                "that department), Departmental Honours courses (DHC), Open Electives (OEC) and Talent Enhancement "
+                "Basket (TEB) courses. Leave programme empty with list_type 'minor' or 'oec' to compare all departments."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "programme": {"type": "string", "description": "Programme or department, e.g. ECE, CSE, Electrical, Mechanical, Data Science, Physics. Empty for all departments (minor/oec only)."},
+                    "list_type": {"type": "string", "enum": ["pec", "minor", "honours", "oec", "teb", "all"]},
+                },
+                "required": ["list_type"],
             },
         },
     },
@@ -332,6 +354,63 @@ def find_course(reg: SourceRegistry, query: str, **_ignored) -> str:
                 block += "\nListed in the course structure only; its syllabus contents were not found."
             blocks.append(block)
         return _with_course_titles(_clip("\n\n".join(blocks)))
+
+
+LIST_TYPES = (("pec", r"\bpecs?\b|program\w*\s+elective|\belectives?\b"), ("minor", r"minor|\bmsc\b"),
+              ("honours", r"hono|\bdhc\b"), ("oec", r"\boecs?\b|open"), ("teb", r"\bteb\b|talent"))
+
+
+def _structure_pages(db) -> list[Page]:
+    return (db.query(Page).filter(Page.category == cstruct.CATEGORY, Page.active.is_(True))
+            .order_by(Page.title).all())
+
+
+def find_course_structure(reg: SourceRegistry, programme: str = "", list_type: str = "all", **_ignored) -> str:
+    kind = next((k for k, pattern in LIST_TYPES if re.search(pattern, list_type or "", re.I)), "all")
+    with SessionLocal() as db:
+        pages = _structure_pages(db)
+    if not pages:
+        return "The course-structure PDFs haven't been read yet. Try search_department_info."
+    names = "; ".join(p.title.removeprefix("Course structure: ") for p in pages)
+
+    if not programme.strip():
+        if kind not in ("minor", "oec"):
+            programme = "ECE"  # this assistant's own department
+        else:  # one line per department, to compare what each offers
+            lines = []
+            for page in pages:
+                n = reg.ref(page.title, page.url)
+                rows = [r for _h, _note, rs in cstruct.lists_of(page.text or "", kind) for r in rs]
+                if rows:
+                    courses = "; ".join(re.sub(r"^- | \(.*\)$", "", r) for r in rows)
+                    lines.append(f"[{n}] {page.title.removeprefix('Course structure: ')}: {courses}")
+            head = (f"{cstruct.KIND_LABELS[kind]}, by department (complete lists from the course structures; "
+                    "each code's official title is next to it):")
+            return _clip(head + "\n" + "\n".join(lines))
+
+    path = cstruct.programme_path(programme)
+    page = next((p for p in pages if path and path.lower() in unquote(p.url).lower()), None)
+    if page is None:
+        return f"No course structure matches {programme!r}. Programmes available: {names}."
+    n = reg.ref(page.title, page.url)
+    text = page.text or ""
+    blocks = []
+    for k in ([kind] if kind != "all" else list(cstruct.KIND_LABELS)):
+        found = cstruct.lists_of(text, k)
+        if not found:
+            blocks.append(f"{cstruct.KIND_LABELS[k]}: no such list in this programme's structure [{n}].")
+            continue
+        for heading, note, rows in found:
+            lines = [f"{cstruct.KIND_LABELS[k]} - \"{heading}\" [{n}]" + (f"\n{note}" if note else "")]
+            if len(rows) > 60:  # Mechanical lists ~150 electives: keep code and title only
+                rows = [re.sub(r" \((?:Autumn|Spring|Both|\d)[^)]*\)$", "", r) for r in rows]
+            lines += rows
+            blocks.append("\n".join(lines))
+    # Titles sit next to each code here, so no "Official titles" footer (it would only repeat them).
+    head = f"[{n}] {page.title}: course lists as printed in the PDF (complete for each list shown; each code's official title is next to it)."
+    if cstruct.looks_misread(text):
+        head += " This PDF is a scanned copy read by OCR: titles may be misspelt, so link it for the student to check."
+    return _clip(head + "\n\n" + "\n\n".join(blocks))
 
 
 STARTUP_QUERY = re.compile(r"\b(start-?\s?ups?|spin-?\s?offs?|incubat\w*)\b", re.I)
@@ -584,6 +663,7 @@ REGISTRY = {
     "search_senior_insights": search_senior_insights,
     "find_course": find_course,
     "find_time_table": find_time_table,
+    "find_course_structure": find_course_structure,
 }
 
 STATUS_TEXT = {
@@ -594,4 +674,5 @@ STATUS_TEXT = {
     "search_senior_insights": "Reading seniors' insights",
     "find_course": "Checking the syllabus",
     "find_time_table": "Reading the time table",
+    "find_course_structure": "Reading the course structures",
 }
