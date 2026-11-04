@@ -10,6 +10,7 @@ Output format, consumed by the chunker:
 """
 
 import re
+from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
@@ -25,6 +26,13 @@ HEADING_CLASSES = ("section-heading", "section-heading-blue", "sub-heading")
 LINK_WORDS = re.compile(r"^(view|download|click here|here|link|pdf|read more|website)$", re.I)
 # The institute CMS makes document buttons with <div onclick="window.location='...'">.
 ONCLICK_URL = re.compile(r"""(?:location(?:\.href)?\s*=|window\.open\(\s*)\s*['"]([^'"]+)['"]""")
+# Every faculty profile has a "Download Resume" button. Without an uploaded resume
+# it links to the channeli home page, so its label alone says nothing.
+RESUME_LABEL = re.compile(r"^(?:download\s+|view\s+)?(?:resume|cv|bio-?data)$", re.I)
+
+
+def is_resume_file(href: str) -> bool:
+    return urlsplit(href).path.lower().endswith((".pdf", ".doc", ".docx"))
 
 
 # Some IITR pages contain Windows-1252 punctuation (curly quotes, dashes) decoded
@@ -94,6 +102,10 @@ def _walk(node: Tag, out: list[tuple[str, str]], base_url: str):
         if child.name == "a" and child.get("href"):
             text = clean(child.get_text(" "))
             href = child["href"].strip()
+            if RESUME_LABEL.match(text):
+                fact = f"Resume / CV: available ({href})" if is_resume_file(href) else "Resume / CV: not uploaded"
+                out += [("break", ""), ("text", fact), ("break", "")]
+                continue
             # Keep URLs for generic link text ("view", "download"...) and PDFs
             # so the assistant can point students at the actual document.
             if href.startswith("http") and (not text or LINK_WORDS.match(text) or href.lower().endswith(".pdf")):
@@ -172,6 +184,23 @@ def html_to_text(html: str, url: str = "") -> tuple[str, str, BeautifulSoup]:
         if not deduped or deduped[-1] != line:
             deduped.append(line)
     return title, "\n".join(deduped), soup
+
+
+def docx_to_text(data: bytes) -> str:
+    """Paragraph text of a Word .docx file (a zip holding word/document.xml)."""
+    import zipfile
+    from io import BytesIO
+    from xml.etree import ElementTree
+
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    with zipfile.ZipFile(BytesIO(data)) as zf:
+        root = ElementTree.fromstring(zf.read("word/document.xml"))
+    lines = []
+    for para in root.iter(f"{w}p"):
+        line = clean("".join(t.text or "" for t in para.iter(f"{w}t")))
+        if line:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def pdf_to_text(data: bytes, max_pages: int = 15) -> str:

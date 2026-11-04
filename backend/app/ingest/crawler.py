@@ -21,7 +21,8 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import CRAWL_DELAY_SECONDS, CRAWL_MAX_PAGES
-from app.ingest.html_text import ONCLICK_URL, clean, html_to_text
+from app.ingest.html_text import ONCLICK_URL, clean, docx_to_text, html_to_text
+from app.ingest.course_structure import ACAD_HOST, CATEGORY as STRUCTURE_CATEGORY, COURSE_STRUCTURES_PAGE, is_structure_pdf, structure_title
 from app.ingest.ocr import extract_pdf
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ SITEMAP_URL = f"https://{HOST}/sitemap.txt"
 RESUME_HOST = "channeli.in"
 MAX_ECE_PDFS = 200
 MAX_INSTITUTE_PDFS = 120
+MAX_STRUCTURE_PDFS = 40  # one per UG programme; 21 today
 MAX_PDF_BYTES = 40 * 1024 * 1024  # one scanned time table is 24 MB
 USER_AGENT = "QueryECE-bot/1.0 (student project; IIT Roorkee ECE assistant)"
 
@@ -97,12 +99,19 @@ def is_pdf(url: str) -> bool:
     return urlsplit(url).path.lower().endswith(".pdf")
 
 
+def is_docx_resume(url: str) -> bool:
+    parts = urlsplit(url)
+    return parts.netloc == RESUME_HOST and parts.path.lower().endswith(".docx")
+
+
 def is_html(url: str) -> bool:
     path = urlsplit(url).path.lower()
     return path.endswith((".html", ".htm", "/")) or "." not in path.rsplit("/", 1)[-1]
 
 
 def page_category(url: str) -> str:
+    if is_structure_pdf(url):
+        return STRUCTURE_CATEGORY
     path = unquote(urlsplit(url).path).lower()
     if "/careers/" in path:
         return "opportunities"
@@ -193,7 +202,8 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
     """Yield FetchedPage objects. Errors on individual pages are logged and skipped."""
     academic = {normalize(u) for u in ACADEMIC_PAGES}
     pdf_titles: dict[str, str] = {}
-    ece_pdfs = institute_pdfs = 0
+    ece_pdfs = institute_pdfs = structure_pdfs = 0
+    structures = normalize(COURSE_STRUCTURES_PAGE)
     fetched = 0
     resume_host_down = False
 
@@ -204,6 +214,7 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
         seeds += _sitemap_seeds(client)
         seeds += [normalize(u) for u in EXTRA_PAGES]
         seeds += sorted(academic)
+        seeds.append(structures)
         queue = deque(dict.fromkeys(seeds))
         seen = set(queue)
         while queue and fetched < max_pages:
@@ -226,6 +237,16 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
             fetched += 1
             ctype = resp.headers.get("content-type", "")
 
+            if is_docx_resume(url):  # a few faculty upload their resume as Word
+                try:
+                    text = docx_to_text(resp.content)
+                except Exception as exc:
+                    log.warning("docx parse failed %s: %s", url, exc)
+                    continue
+                if text.strip():
+                    yield FetchedPage(url=url, title=pdf_titles.get(url, url), text=text, is_pdf=True)
+                continue
+
             if "pdf" in ctype or is_pdf(url):
                 if len(resp.content) > MAX_PDF_BYTES:
                     log.warning("skipping oversized pdf (%d MB): %s", len(resp.content) >> 20, url)
@@ -245,6 +266,14 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
             title, text, soup = html_to_text(resp.text, url)
             yield FetchedPage(url=url, title=title, text=text, soup=soup)
 
+            if url == structures:  # only each programme's current structure PDF
+                for link, label in _links(soup, url):
+                    if link not in seen and is_structure_pdf(link) and structure_pdfs < MAX_STRUCTURE_PDFS:
+                        structure_pdfs += 1
+                        seen.add(link)
+                        pdf_titles[link] = structure_title(label, link)
+                        queue.append(link)
+                continue
             # Career pages are handled by the opportunities extractor, and academic
             # pages only contribute their PDFs: the rest of the site isn't in scope.
             in_ece = in_ece_scope(url)
@@ -257,7 +286,7 @@ def crawl(max_pages: int = CRAWL_MAX_PAGES):
                 if in_ece and host == HOST and in_ece_scope(link) and is_html(link):
                     seen.add(link)
                     queue.append(link)
-                elif not is_pdf(link):
+                elif not (is_pdf(link) or is_docx_resume(link)):
                     continue
                 elif APPLICANT_LIST.search(f"{label} {unquote(urlsplit(link).path)}"):
                     continue

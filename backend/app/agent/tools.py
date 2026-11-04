@@ -3,12 +3,14 @@ registers the pages it used so answers can cite them as [n]."""
 
 import hashlib
 import re
+from urllib.parse import unquote
 
 from sqlalchemy import func, or_
 
 from app.db.database import SessionLocal
 from app.config import APP_URL
 from app.db.models import Course, Faculty, Insight, InsightVote, Opportunity, Page, Project, Startup
+from app.ingest import course_structure as cstruct
 from app.ingest.extractors import FacultyResolver, name_key
 from app.rag import index
 from app.rag.embeddings import cosine, embed_passages, embed_query
@@ -78,13 +80,16 @@ TOOL_SCHEMAS = [
             "name": "find_faculty",
             "description": (
                 "Look up ECE faculty. Give `name` for one person's contact details, designation, interests, "
-                "projects and startups; or `research_topic` to rank faculty whose research matches a topic."
+                "resume/CV status, projects and startups; or `research_topic` to rank faculty whose research "
+                "matches a topic; or `with_resume` to list every faculty member with a resume/CV on file; "
+                "or no arguments for the whole directory."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
                     "research_topic": {"type": "string"},
+                    "with_resume": {"type": "boolean", "description": "List exactly the faculty who have a resume/CV."},
                 },
             },
         },
@@ -159,6 +164,26 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "find_course_structure",
+            "description": (
+                "Official UG course structures (2023-24 onwards) of every IITR programme: the lists of Programme "
+                "Electives (PEC), Minor Specialization courses (what students of other branches take for a minor in "
+                "that department), Departmental Honours courses (DHC), Open Electives (OEC) and Talent Enhancement "
+                "Basket (TEB) courses. Leave programme empty with list_type 'minor' or 'oec' to compare all departments."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "programme": {"type": "string", "description": "Programme or department, e.g. ECE, CSE, Electrical, Mechanical, Data Science, Physics. Empty for all departments (minor/oec only)."},
+                    "list_type": {"type": "string", "enum": ["pec", "minor", "honours", "oec", "teb", "all"]},
+                },
+                "required": ["list_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_senior_insights",
             "description": (
                 "Tips written by IITR students/seniors that are NOT on any website: experiences with professors "
@@ -200,6 +225,9 @@ def _expand_acronyms(query: str) -> str:
     extra += [short for short, full in ACRONYMS.items() if full.lower() in query.lower()]
     if "FIC" not in extra and re.search(r"in-?\s?charge", query, re.I):
         extra.append("FIC")
+    # Lab inventories sit under these headings, which "labs in the department" rarely matches.
+    if re.search(r"\blabs?\b|laborator", query, re.I):
+        extra.append("Lab Facilities; Research Groups and Labs")
     return f"{query} ({'; '.join(extra)})" if extra else query
 
 
@@ -328,7 +356,69 @@ def find_course(reg: SourceRegistry, query: str, **_ignored) -> str:
         return _with_course_titles(_clip("\n\n".join(blocks)))
 
 
+LIST_TYPES = (("pec", r"\bpecs?\b|program\w*\s+elective|\belectives?\b"), ("minor", r"minor|\bmsc\b"),
+              ("honours", r"hono|\bdhc\b"), ("oec", r"\boecs?\b|open"), ("teb", r"\bteb\b|talent"))
+
+
+def _structure_pages(db) -> list[Page]:
+    return (db.query(Page).filter(Page.category == cstruct.CATEGORY, Page.active.is_(True))
+            .order_by(Page.title).all())
+
+
+def find_course_structure(reg: SourceRegistry, programme: str = "", list_type: str = "all", **_ignored) -> str:
+    kind = next((k for k, pattern in LIST_TYPES if re.search(pattern, list_type or "", re.I)), "all")
+    with SessionLocal() as db:
+        pages = _structure_pages(db)
+    if not pages:
+        return "The course-structure PDFs haven't been read yet. Try search_department_info."
+    names = "; ".join(p.title.removeprefix("Course structure: ") for p in pages)
+
+    if not programme.strip():
+        if kind not in ("minor", "oec"):
+            programme = "ECE"  # this assistant's own department
+        else:  # one line per department, to compare what each offers
+            lines = []
+            for page in pages:
+                n = reg.ref(page.title, page.url)
+                rows = [r for _h, _note, rs in cstruct.lists_of(page.text or "", kind) for r in rs]
+                if rows:
+                    courses = "; ".join(re.sub(r"^- | \(.*\)$", "", r) for r in rows)
+                    lines.append(f"[{n}] {page.title.removeprefix('Course structure: ')}: {courses}")
+            head = (f"{cstruct.KIND_LABELS[kind]}, by department (complete lists from the course structures; "
+                    "each code's official title is next to it):")
+            return _clip(head + "\n" + "\n".join(lines))
+
+    path = cstruct.programme_path(programme)
+    page = next((p for p in pages if path and path.lower() in unquote(p.url).lower()), None)
+    if page is None:
+        return f"No course structure matches {programme!r}. Programmes available: {names}."
+    n = reg.ref(page.title, page.url)
+    text = page.text or ""
+    blocks = []
+    for k in ([kind] if kind != "all" else list(cstruct.KIND_LABELS)):
+        found = cstruct.lists_of(text, k)
+        if not found:
+            blocks.append(f"{cstruct.KIND_LABELS[k]}: no such list in this programme's structure [{n}].")
+            continue
+        for heading, note, rows in found:
+            lines = [f"{cstruct.KIND_LABELS[k]} - \"{heading}\" [{n}]" + (f"\n{note}" if note else "")]
+            if len(rows) > 60:  # Mechanical lists ~150 electives: keep code and title only
+                rows = [re.sub(r" \((?:Autumn|Spring|Both|\d)[^)]*\)$", "", r) for r in rows]
+            lines += rows
+            blocks.append("\n".join(lines))
+    # Titles sit next to each code here, so no "Official titles" footer (it would only repeat them).
+    head = f"[{n}] {page.title}: course lists as printed in the PDF (complete for each list shown; each code's official title is next to it)."
+    if cstruct.looks_misread(text):
+        head += " This PDF is a scanned copy read by OCR: titles may be misspelt, so link it for the student to check."
+    return _clip(head + "\n\n" + "\n\n".join(blocks))
+
+
 STARTUP_QUERY = re.compile(r"\b(start-?\s?ups?|spin-?\s?offs?|incubat\w*)\b", re.I)
+# "list all labs", "which professors have...", "names of the committee members", "how many..."
+LIST_QUERY = re.compile(r"\b(?:list|all|every|names\s+of|how\s+many)\b|\bwhich\s+\w{2,}[^\Ws]s\b", re.I)
+LIST_HITS = 12
+LIST_HIT_CHARS = 480
+RESUME_EXCERPT_CHARS = 2500  # education and positions; well inside MAX_TOOL_CHARS with the card
 
 
 def _startup_blocks(reg: SourceRegistry) -> list[str]:
@@ -350,13 +440,25 @@ def search_department_info(reg: SourceRegistry, query: str, **_ignored) -> str:
     # No section filter: the model's category guesses (e.g. "research" for a PhD
     # interview PDF) excluded the right pages more often than they helped.
     blocks = _startup_blocks(reg) if STARTUP_QUERY.search(query) else []
-    hits = index.search(_expand_acronyms(query), k=3 if blocks else 5)
+    if LIST_QUERY.search(query) and not blocks:
+        # A list spans many pages: show more of them, less of each, within the same budget.
+        hits, pages = [], set()
+        for hit in index.search(_expand_acronyms(query), k=24):
+            if hit.url not in pages and len(hits) < LIST_HITS:
+                pages.add(hit.url)
+                hits.append(hit)
+        cut = LIST_HIT_CHARS
+    else:
+        hits = index.search(_expand_acronyms(query), k=3 if blocks else 5)
+        cut = 1300  # whole chunk (~1200 chars + header)
     if not hits and not blocks:
         return "This search found nothing on the department website."
     for hit in hits:
         n = reg.ref(hit.title, hit.url)
-        blocks.append(f"[{n}] {hit.text[:1300]}")  # whole chunk (~1200 chars + header)
-    return _with_course_titles(_clip("\n\n".join(blocks)))
+        blocks.append(f"[{n}] {hit.text[:cut]}")
+    # Kept outside _clip so truncation can't drop it.
+    return _with_course_titles(_clip("\n\n".join(blocks))) + (
+        "\n\n(These are the few best-matching passages, not a complete list: never present them as all there is.)")
 
 
 _faculty_vec_cache: dict[str, list[float]] = {}
@@ -383,14 +485,29 @@ def _faculty_card(f: Faculty, reg: SourceRegistry) -> str:
         parts.append(f"Website: {f.website}")
     if f.interests:
         parts.append(f"Research interests: {f.interests}")
+    if f.resume_url:
+        parts.append(f"Resume / CV: available [{reg.ref(f'Resume / CV: {f.name}', f.resume_url)}]")
+    elif f.resume_url == "":
+        parts.append("Resume / CV: none uploaded on the department profile")
     return "\n".join(parts)
 
 
-def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: str | None = None) -> str:
+def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: str | None = None,
+                 with_resume: bool = False, **_ignored) -> str:
     with SessionLocal() as db:
         faculty = db.query(Faculty).all()
         if not faculty:
             return "Faculty directory is empty (the website has not been indexed yet)."
+
+        if with_resume and not name and not research_topic:
+            have = sorted((f for f in faculty if f.resume_url), key=lambda f: f.name)
+            if not have and all(f.resume_url is None for f in faculty):
+                return "Which faculty have a resume isn't known yet (profiles not indexed since this was added)."
+            lines = [f"Complete list: {len(have)} of {len(faculty)} ECE faculty have a resume / CV on their "
+                     "department profile (the rest have none uploaded):"]
+            lines += [f"- {f.name} — {f.designation or ''} "
+                      f"[{reg.ref(f'Resume / CV: {f.name}', f.resume_url)}]" for f in have]
+            return _clip("\n".join(lines))
 
         if name:
             resolver = FacultyResolver([(f.id, f.name) for f in faculty])
@@ -411,6 +528,13 @@ def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: s
                     block += [f"- {p.title} ({p.agency or 'agency n/a'}, {p.year or 'year n/a'})" for p in projects]
                 for s in db.query(Startup).filter_by(faculty_id=f.id).all():
                     block.append(f"Startup: {s.name} — {s.website or ''}")
+                # The agent gets one round of tool calls, so a "background / CV" question
+                # answered here must carry the resume itself, not just a link to it.
+                resume = (db.query(Page).filter_by(url=f.resume_url, active=True).first()
+                          if f.resume_url else None)
+                if resume and resume.text:
+                    rn = reg.ref(f"Resume / CV: {f.name}", f.resume_url)
+                    block.append(f"From their resume / CV [{rn}] (beginning):\n{resume.text[:RESUME_EXCERPT_CHARS]}")
                 block.append("(For publications, students, education or patents, use search_department_info "
                              "with the faculty name.)")
                 out.append("\n".join(block))
@@ -434,7 +558,8 @@ def find_faculty(reg: SourceRegistry, name: str | None = None, research_topic: s
 
         n = reg.ref("ECE Faculty Members", FACULTY_DIRECTORY_URL)
         lines = [f"[{n}] ECE faculty ({len(faculty)}):"]
-        lines += [f"- {f.name} — {f.designation or ''} — {f.email or ''}" for f in sorted(faculty, key=lambda f: f.name)]
+        lines += [f"- {f.name} — {f.designation or ''} — {f.email or ''}" + (" — has resume/CV" if f.resume_url else "")
+                  for f in sorted(faculty, key=lambda f: f.name)]
         return _clip("\n".join(lines))
 
 
@@ -538,6 +663,7 @@ REGISTRY = {
     "search_senior_insights": search_senior_insights,
     "find_course": find_course,
     "find_time_table": find_time_table,
+    "find_course_structure": find_course_structure,
 }
 
 STATUS_TEXT = {
@@ -548,4 +674,5 @@ STATUS_TEXT = {
     "search_senior_insights": "Reading seniors' insights",
     "find_course": "Checking the syllabus",
     "find_time_table": "Reading the time table",
+    "find_course_structure": "Reading the course structures",
 }

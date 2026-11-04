@@ -3,11 +3,14 @@
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass, field
+
+import httpx
 
 import groq
 
-from app.config import GROQ_API_KEY, GROQ_FAST_MODEL, GROQ_MODEL
+from app.config import GEMINI_API_KEY, GEMINI_MODEL, GROQ_API_KEY, GROQ_FAST_MODEL, GROQ_MODEL
 
 log = logging.getLogger(__name__)
 _clients: dict[int, groq.AsyncGroq] = {}
@@ -82,6 +85,13 @@ async def stream_round(messages, tools=None, tool_choice="auto", model=GROQ_MODE
         try:
             return await _stream_once(messages, tools, tool_choice, other, on_token, retries=0)
         except groq.RateLimitError as exc:
+            if GEMINI_API_KEY:  # a different provider with its own free quota
+                try:
+                    return await _stream_gemini(messages, tools, tool_choice, on_token)
+                except GeminiFailed as gexc:
+                    log.warning("Gemini backup failed: %s", gexc)
+                    if gexc.streamed:  # part of an answer is already on screen
+                        raise LLMUnavailable(BUSY)
             # A model out of its daily quota stays out for a while: wait for the one that frees up first.
             seconds, sooner = min((_retry_after(exc), other), (first_wait, model))
             if on_wait is None or seconds > MAX_QUOTA_WAIT:
@@ -144,3 +154,88 @@ async def complete(messages, model=GROQ_FAST_MODEL, max_tokens=400, temperature=
         log.warning("rate limited on %s; falling back to %s", model, GROQ_FAST_MODEL)
         return await complete(messages, GROQ_FAST_MODEL, max_tokens, temperature)
     return (resp.choices[0].message.content or "").strip()
+
+
+# --- Gemini backup -----------------------------------------------------------
+
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+# The student's own CV text stays with Groq: free-tier Gemini content may be used by Google.
+CV_EXCERPT = re.compile(
+    r"\n?CV excerpt \(written by the student\):\n.*?(?=\nProfessors whose listed research|\n\(No research interests|\Z)", re.S)
+
+
+class GeminiFailed(Exception):
+    def __init__(self, message: str, streamed: bool = False):
+        super().__init__(message)
+        self.streamed = streamed  # True once text reached the student
+
+
+def without_cv(messages: list[dict]) -> list[dict]:
+    return [{**m, "content": CV_EXCERPT.sub("", m["content"])} if isinstance(m.get("content"), str) else m
+            for m in messages]
+
+
+def for_gemini(messages: list[dict]) -> list[dict]:
+    """Gemini's OpenAI-compatible endpoint reads only the first system message, but the
+    agent passes tool results and the "answer now" instruction as later ones: send those
+    as user turns, merged with any neighbouring plain user turn."""
+    out: list[dict] = []
+    for i, m in enumerate(without_cv(messages)):
+        if m["role"] == "system" and i > 0:
+            m = {"role": "user", "content": m["content"]}
+        prev = out[-1] if out else None
+        if (prev and m["role"] == "user" and prev["role"] == "user"
+                and isinstance(prev.get("content"), str) and isinstance(m.get("content"), str)):
+            out[-1] = {"role": "user", "content": prev["content"] + "\n\n" + m["content"]}
+        else:
+            out.append(m)
+    return out
+
+
+async def _stream_gemini(messages, tools, tool_choice, on_token) -> RoundResult:
+    """One streamed completion from Gemini's OpenAI-compatible endpoint."""
+    payload = {"model": GEMINI_MODEL, "messages": for_gemini(messages), "stream": True,
+               "temperature": 0.1, "max_tokens": 1200}
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = tool_choice
+    result = RoundResult(model=GEMINI_MODEL)
+    calls: dict[int, ToolCall] = {}
+    log.info("answering with the Gemini backup (%s)", GEMINI_MODEL)
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10)) as http:
+            async with http.stream("POST", GEMINI_URL, json=payload,
+                                   headers={"Authorization": f"Bearer {GEMINI_API_KEY}"}) as resp:
+                if resp.status_code != 200:
+                    raise GeminiFailed(f"HTTP {resp.status_code}: {(await resp.aread())[:300]!r}")
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    if not chunk.get("choices"):
+                        continue
+                    delta = chunk["choices"][0].get("delta") or {}
+                    if delta.get("content"):
+                        result.content += delta["content"]
+                        if on_token:
+                            await on_token(delta["content"])
+                    for tc in delta.get("tool_calls") or []:
+                        # Gemini sends each call whole and may leave out the index.
+                        idx = tc["index"] if "index" in tc else len(calls)
+                        call = calls.setdefault(idx, ToolCall(id="", name=""))
+                        call.id = tc.get("id") or call.id or f"call_{idx}"
+                        fn = tc.get("function") or {}
+                        call.name = fn.get("name") or call.name
+                        call.arguments += fn.get("arguments") or ""
+    except GeminiFailed as exc:
+        exc.streamed = bool(result.content)
+        raise
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        raise GeminiFailed(f"{exc.__class__.__name__}: {exc}", streamed=bool(result.content)) from exc
+    result.tool_calls = [calls[i] for i in sorted(calls)]
+    if not result.content and not result.tool_calls:
+        raise GeminiFailed("empty response")
+    return result
